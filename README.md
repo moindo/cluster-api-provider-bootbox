@@ -1,4 +1,4 @@
- Keep it short: the iPXE URL travels in the 128-byte DHCP boot file field (the provider refuses longer URLs).# cluster-api-provider-bootbox
+ # cluster-api-provider-bootbox
 
 A [Cluster API](https://cluster-api.sigs.k8s.io/) infrastructure provider that
 turns bare-metal servers into Talos worker nodes. Servers are PXE-booted
@@ -68,7 +68,7 @@ Run it in the namespace of the Tinkerbell `Hardware` objects (or set
 
 | Flag | Meaning |
 |---|---|
-| `--boot-base-url` | URL of the boot server as reachable by booting hosts (expose the `boot` Service, e.g. under a path of the PXE ingress). |
+| `--boot-base-url` | URL of the boot server as reachable by booting hosts (expose the `boot` Service, e.g. under a path of the PXE ingress). Keep it short: the iPXE URL travels in the 128-byte DHCP boot file field (the provider refuses longer URLs). |
 | `--kernel-url`, `--initrd-url` | Talos PXE assets, e.g. matchbox `/assets/vmlinuz` and `/assets/initramfs.xz`. |
 | `--kernel-args` | Comma-separated kernel arguments (default: matchbox defaults plus the wipe). |
 | `--idle-ipxe-url` | iPXE URL restored on the Hardware after provisioning. |
