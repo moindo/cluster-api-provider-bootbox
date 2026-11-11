@@ -1,4 +1,4 @@
- # cluster-api-provider-bootbox
+# cluster-api-provider-bootbox
 
 A [Cluster API](https://cluster-api.sigs.k8s.io/) infrastructure provider that
 turns bare-metal servers into Talos worker nodes. Servers are PXE-booted
