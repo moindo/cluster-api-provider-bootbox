@@ -10,23 +10,22 @@ import base64, json, sys, pathlib
 
 chart, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 schema = json.loads((chart / "values.schema.json").read_text())
-icon = base64.b64encode((chart / "logos" / "baremetal.svg").read_bytes()).decode()
 
 APPS = {
-    "baremetal-nodes": dict(
-        kind="BareMetalNodes", singular="baremetalnodes", plural="baremetalnodeses",
-        prefix="baremetal-nodes-", category="IaaS", title="Bare Metal Nodes", weight=42,
-        tags=["compute", "bare-metal"],
-        description="Bare-metal worker pool for a managed Kubernetes cluster",
-        hidden={"storageClass", "instanceType", "diskSize", "resources", "gpus",
-                "logSerialConsole", "podCpuLimit", "podCpuRequest", "osImage",
-                "substrate", "proxmox"},
-        order=["cluster", "minReplicas", "maxReplicas", "roles", "bootbox", "kernelModules",
-               "kubelet", "talos", "version", "maxUnhealthy", "nodeStartupTimeout",
-               "readyUnknownTimeout", "readyFalseTimeout", "maxNodeProvisionTime"],
+    # Drop-in replacement of cozystack's kubernetes-nodes ApplicationDefinition
+    # (v1.7.0) with the bootbox substrate; same kind, names and dashboard entry.
+    "kubernetes-nodes": dict(
+        kind="KubernetesNodes", singular="kubernetesnodes", plural="kubernetesnodeses",
+        prefix="kubernetes-nodes-", category="IaaS", title="Kubernetes Nodes", weight=41,
+        tags=["compute"], icon="kubernetes.svg",
+        description="Worker node pool for a managed Kubernetes cluster",
+        hidden=set(),
+        order=["cluster", "storageClass", "minReplicas", "maxReplicas", "instanceType", "diskSize",
+               "roles", "resources", "gpus", "kubelet", "logSerialConsole", "maxUnhealthy",
+               "nodeStartupTimeout", "readyUnknownTimeout", "readyFalseTimeout",
+               "maxNodeProvisionTime", "version", "osImage", "talos", "substrate", "proxmox",
+               "bootbox", "kernelModules", "podCpuLimit", "podCpuRequest"],
         annotations={
-            # Same as kubernetes-nodes: the release settles while the
-            # talos-reconcile Job waits for the parent control plane.
             "release.cozystack.io/helm-install-timeout": "15m",
             "release.cozystack.io/helm-install-disable-wait": "true",
         }),
@@ -35,12 +34,13 @@ APPS = {
         prefix="baremetal-server-", category="Administration", title="Bare Metal Servers",
         weight=60, tags=["bare-metal"],
         description="Bare-metal server for BootBox provisioning (DHCP reservation, BMC, pool labels)",
-        hidden=set(),
+        hidden=set(), icon="baremetal.svg",
         order=["mac", "ip", "nameServers", "timeServers", "bmc", "labels", "consumerNamespaces",
                "maintenance", "staticAddress", "configPatches", "extraKernelArgs", "arch", "idleIPXEURL"],
         annotations={}),
 }
 app = APPS[chart.name]
+icon = base64.b64encode((chart / "logos" / app["icon"]).read_bytes()).decode()
 schema["properties"] = {k: v for k, v in schema["properties"].items() if k not in app["hidden"]}
 keys = [["apiVersion"], ["appVersion"], ["kind"], ["metadata"], ["metadata", "name"]]
 for k in app["order"] + sorted(set(schema["properties"]) - set(app["order"])):

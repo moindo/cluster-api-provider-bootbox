@@ -40,7 +40,7 @@
     "instanceType": {
       "description": "Virtual machine instance type.",
       "type": "string",
-      "default": "",
+      "default": "u1.medium",
       "x-cozystack-options": {
         "source": "instancetype"
       }
@@ -329,9 +329,9 @@
       }
     },
     "substrate": {
-      "description": "Which infrastructure provider backs this pool's workers. `bootbox` runs them on bare-metal servers (BootBoxHosts) provisioned by the BootBox Cluster API provider; `kubevirt` and `proxmox` are kept from the upstream kubernetes-nodes chart.",
+      "description": "Which infrastructure provider backs this pool's workers. `kubevirt` runs worker VMs inside this cluster on KubeVirt, `proxmox` on an external Proxmox VE cluster through capmox, `bootbox` on bare-metal servers (BootBoxHosts) claimed by the BootBox Cluster API provider and PXE-booted over Redfish (set `bootbox.*`; `instanceType` does not apply). Switching an existing pool is refused; create a new pool on the other substrate.",
       "type": "string",
-      "default": "bootbox",
+      "default": "kubevirt",
       "x-kubernetes-validations": [
         {
           "rule": "self == oldSelf",

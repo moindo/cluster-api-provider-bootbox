@@ -1,3 +1,5 @@
+substrate: bootbox
+instanceType: ""
 cluster: training
 minReplicas: 0
 maxReplicas: 1

@@ -26,13 +26,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
-      - name: Render baremetal-nodes with the bootbox substrate
-        run: helm template baremetal-nodes-training-gpu packages/apps/baremetal-nodes --namespace tenant-training --values packages/apps/baremetal-nodes/tests/values-bootbox.yaml > /dev/null
+      - name: Render kubernetes-nodes with the bootbox substrate
+        run: helm template kubernetes-nodes-training-gpu packages/apps/kubernetes-nodes --namespace tenant-training --values packages/apps/kubernetes-nodes/tests/values-bootbox.yaml > /dev/null
       - name: Render baremetal-server
         run: helm template baremetal-server-xa06 packages/apps/baremetal-server --namespace tenant-root --values packages/apps/baremetal-server/tests/values-xa06.yaml > /dev/null
       - name: ApplicationDefinitions are up to date
         run: |
-          make -C packages/system/baremetal-nodes-rd generate
+          make -C packages/system/kubernetes-nodes-rd generate
           make -C packages/system/baremetal-server-rd generate
           git diff --exit-code
 
