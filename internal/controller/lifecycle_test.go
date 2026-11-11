@@ -386,3 +386,23 @@ func TestOldTokenFormatIsReplaced(t *testing.T) {
 		t.Fatalf("old token still used: %s", r.IPXEURL)
 	}
 }
+
+func TestBootTimeoutCountsFromLastIPXEFetch(t *testing.T) {
+	e := newEnv(t, fixtures()...)
+	e.reconcile()
+	e.reconcile() // boot requested at t0
+	e.now = e.now.Add(10 * time.Minute)
+	if code, _ := e.get(e.reservation().IPXEURL); code != http.StatusOK { // host is booting at t0+10m
+		t.Fatalf("iPXE status %d", code)
+	}
+	e.now = e.now.Add(10 * time.Minute) // t0+20m: past the timeout from the request, not from the fetch
+	e.reconcile()
+	if a := e.host().Status.Provisioning.BootAttempts; a != 1 {
+		t.Fatalf("host was reset while booting: attempts=%d", a)
+	}
+	e.now = e.now.Add(6 * time.Minute)
+	e.reconcile()
+	if a := e.host().Status.Provisioning.BootAttempts; a != 2 {
+		t.Fatalf("no retry after a silent timeout: attempts=%d", a)
+	}
+}

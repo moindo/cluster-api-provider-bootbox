@@ -306,6 +306,12 @@ spec:
                       first boot carries the disk wipe: Talos reboots after wiping.
                     format: date-time
                     type: string
+                  lastIPXEServedAt:
+                    description: |-
+                      LastIPXEServedAt is the latest iPXE fetch. The boot timeout counts from
+                      it, so a host that is still booting is not reset.
+                    format: date-time
+                    type: string
                 type: object
               state:
                 description: HostState is the lifecycle state of a BootBoxHost.

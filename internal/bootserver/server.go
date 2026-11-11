@@ -90,11 +90,16 @@ func (s *Server) serveIPXE(w http.ResponseWriter, r *http.Request) {
 	firstBoot := h.Status.Provisioning.IPXEServedAt == nil
 	if firstBoot {
 		args = append(args, s.WipeArgs...)
-		if err := s.updateStatus(r.Context(), h, func(p *infrav1.ProvisioningStatus, now metav1.Time) { p.IPXEServedAt = &now }); err != nil {
-			logger.Error(err, "recording iPXE fetch")
-			http.Error(w, "try again", http.StatusServiceUnavailable)
-			return
+	}
+	if err := s.updateStatus(r.Context(), h, func(p *infrav1.ProvisioningStatus, now metav1.Time) {
+		if p.IPXEServedAt == nil {
+			p.IPXEServedAt = &now
 		}
+		p.LastIPXEServedAt = &now
+	}); err != nil {
+		logger.Error(err, "recording iPXE fetch")
+		http.Error(w, "try again", http.StatusServiceUnavailable)
+		return
 	}
 	args = append(args, "talos.config="+s.URLs.Config(h, r.PathValue("token")))
 	w.Header().Set("Content-Type", "text/plain")

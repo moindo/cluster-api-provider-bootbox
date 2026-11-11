@@ -134,6 +134,10 @@ type ProvisioningStatus struct {
 	// first boot carries the disk wipe: Talos reboots after wiping.
 	// +optional
 	IPXEServedAt *metav1.Time `json:"ipxeServedAt,omitempty"`
+	// LastIPXEServedAt is the latest iPXE fetch. The boot timeout counts from
+	// it, so a host that is still booting is not reset.
+	// +optional
+	LastIPXEServedAt *metav1.Time `json:"lastIPXEServedAt,omitempty"`
 	// ConfigServedAt is when the host fetched its machine config.
 	// +optional
 	ConfigServedAt *metav1.Time `json:"configServedAt,omitempty"`
