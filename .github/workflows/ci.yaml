@@ -32,12 +32,12 @@ jobs:
         run: |
           printf 'kubelet:\n  evictionHardMemory: "7%%"\n  evictionSoftMemory: "10%%"\n' > /tmp/kubelet.yaml
           helm template kubernetes-nodes-training-gpu packages/apps/kubernetes-nodes --namespace tenant-training --values packages/apps/kubernetes-nodes/tests/values-bootbox.yaml --values /tmp/kubelet.yaml > /dev/null
-      - name: Render baremetal-server
-        run: helm template baremetal-server-xa06 packages/apps/baremetal-server --namespace tenant-root --values packages/apps/baremetal-server/tests/values-xa06.yaml > /dev/null
+      - name: Render the baremetal module
+        run: helm template baremetal packages/apps/baremetal --namespace tenant-root --values packages/apps/baremetal/tests/values-cozykite.yaml > /dev/null
       - name: ApplicationDefinitions are up to date
         run: |
           make -C packages/system/kubernetes-nodes-rd generate
-          make -C packages/system/baremetal-server-rd generate
+          make -C packages/system/baremetal-rd generate
           git diff --exit-code
 
   image:

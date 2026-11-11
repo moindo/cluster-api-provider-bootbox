@@ -94,7 +94,7 @@ func main() {
 		LeaderElectionID:       "cluster-api-provider-bootbox",
 		// Secrets are read directly: caching them would mirror every Secret
 		// of the cluster (bootstrap data lives in the tenant namespaces).
-		Client: client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}},
+		Client: client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}, &corev1.ConfigMap{}}}},
 	})
 	if err != nil {
 		logger.Error(err, "creating manager")

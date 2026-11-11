@@ -7,8 +7,8 @@ Cozystack integration of the BootBox provider, laid out like cozystack's own
 |---|---|
 | `apps/kubernetes-nodes` | Cozystack v1.7.0 `apps/kubernetes-nodes` plus the **`bootbox` substrate**: bare-metal pools are ordinary `KubernetesNodes` with `substrate: bootbox` and `bootbox.*` (host selector, resolvers, apiserver address, node subnets, install disk, sysctls, extra Talos documents). KubeVirt and Proxmox pools render byte-identical to upstream. Proposed upstream; this copy replaces cozystack's package until then. |
 | `system/kubernetes-nodes-rd` | `ApplicationDefinition` `KubernetesNodes` pointing at this chart (`make -C system/kubernetes-nodes-rd generate`). |
-| `apps/baremetal-server` | `BareMetalServer` app (dashboard: Administration, tenant-root only): one physical server, rendering its Tinkerbell `Hardware` (DHCP reservation) and `BootBoxHost` (BMC, labels, admitted tenants, static address) in `cozy-bootbox`. BMC credentials stay in a hand-made Secret `<name>-bmc`. |
-| `system/baremetal-server-rd` | `ApplicationDefinition` `BareMetalServer`. |
+| `apps/baremetal` | `BareMetal` admin module (dashboard: Admin → Modules, one instance `baremetal` in tenant-root): a list of servers, each rendering its Tinkerbell `Hardware` (DHCP reservation) and `BootBoxHost` (BMC, labels, admitted tenants, static address) in `cozy-bootbox`. BMC credentials stay in hand-made Secrets `<name>-bmc`. |
+| `system/baremetal-rd` | `ApplicationDefinition` `BareMetal` (module). |
 | `library/cozy-lib` | Vendored cozystack v1.7.0 library chart. |
 
 ## Install
@@ -25,8 +25,22 @@ Cozystack integration of the BootBox provider, laid out like cozystack's own
      `kubernetes-nodes` (`apps/kubernetes-nodes`, library `cozy-lib`) and
      `kubernetes-nodes-rd` (`system/kubernetes-nodes-rd`, installed in
      `cozy-system` as `kubernetes-nodes-rd`), same dependencies as upstream.
-   - `moindo.baremetal-server-application` (variant `default`): components
-     `baremetal-server` and `baremetal-server-rd`.
+   - `moindo.baremetal-application` (variant `default`): components
+     `baremetal` and `baremetal-rd`.
+
+## Status in the dashboard
+
+The console shows the ConfigMaps an application lists in its
+`<release>-resourcemap` ConfigMap (data key `resources`, a YAML list of
+`{apiVersion: v1, kind: ConfigMap, name}`) in a ConfigMaps tab. The provider
+fills them:
+
+- hosts with the annotation `bootbox.infrastructure.cluster.x-k8s.io/status-configmap: <ns>/<name>`
+  (set by the `baremetal` module: `tenant-root/baremetal-status`): state, power,
+  BMC, model, serial, BIOS, consumer, admitted tenants
+- machines of a MachineDeployment: `<deployment>-bootbox` in the pool's
+  namespace (listed by `kubernetes-nodes` for `substrate: bootbox`): host,
+  node, address, provisioning phase
 
 Re-base `apps/kubernetes-nodes` onto cozystack's chart on every Cozystack
 upgrade (`diff -r` against the release's `packages/apps/kubernetes-nodes`).

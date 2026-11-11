@@ -1,0 +1,52 @@
+## @section Bare metal
+##
+## Cozystack module (one instance, tenant-root, named "baremetal"). Each entry
+## of `servers` renders the server's Tinkerbell Hardware (DHCP reservation
+## answered by smee) and BootBoxHost (BMC, labels, admitted tenants) in the
+## BootBox namespace. The BootBox provider reports every server into the
+## ConfigMap "baremetal-status", shown in the module's ConfigMaps tab.
+
+## @typedef {struct} Defaults - Values shared by all servers; each server may override them.
+## @field {string} [netmask] - Netmask of the reservations, e.g. 255.255.248.0.
+## @field {string} [gateway] - Default gateway of the reservations.
+## @field {[]string} [nameServers] - Resolvers handed out by DHCP.
+## @field {[]string} [timeServers] - NTP servers handed out by DHCP.
+## @field {string} [idleIPXEURL] - iPXE script URL while a server is not provisioning (the BootBox matchbox script).
+
+## @param {Defaults} defaults - Shared network settings.
+defaults:
+  netmask: ""
+  gateway: ""
+  nameServers: []
+  timeServers: []
+  idleIPXEURL: ""
+
+## @typedef {struct} BMC - Redfish endpoint of a server.
+## @field {string} address - Redfish base URL, e.g. https://10.0.0.10.
+## @field {string} [credentialsSecret] - Secret in cozy-bootbox with keys username and password; defaults to <name>-bmc. Create it by hand, credentials never go into this spec.
+## @field {string} [certificateFingerprint] - SHA-256 fingerprint of the BMC certificate (pinning).
+## @field {bool} [insecureSkipVerify] - Skip TLS verification when no fingerprint is set.
+## @field {string} [systemID] - Redfish ComputerSystem, e.g. System.Embedded.1.
+
+## @typedef {struct} StaticAddress - Static node address written into one link document of the machine config.
+## @field {string} address - CIDR, e.g. 172.19.24.36/21.
+## @field {string} [link] - Document name, default bond1.
+## @field {string} [kind] - Document kind, default BondConfig.
+
+## @typedef {struct} Server - One physical server.
+## @field {string} name - Server and node hostname (DNS label).
+## @field {string} mac - MAC address of the PXE network interface.
+## @field {string} ip - Reserved IPv4 address.
+## @field {BMC} bmc - Baseboard management controller.
+## @field {map[string]string} [labels] - Labels on the BootBoxHost; KubernetesNodes pools with substrate bootbox select hosts by them.
+## @field {[]string} [consumerNamespaces] - Tenant namespaces whose pools may claim this server.
+## @field {bool} [maintenance] - Keep the server from being claimed (default true).
+## @field {StaticAddress} [staticAddress] - Static node address; empty keeps DHCP.
+## @field {[]object} [configPatches] - Further host-specific JSON merge patches ({kind, name, patch}).
+## @field {[]string} [extraKernelArgs] - Kernel arguments added to the provisioning boot.
+## @field {string} [arch] - x86_64 (default) or aarch64.
+## @field {string} [netmask] - Overrides defaults.netmask.
+## @field {string} [gateway] - Overrides defaults.gateway.
+
+## @param {[]Server} servers - Registered servers.
+servers: []

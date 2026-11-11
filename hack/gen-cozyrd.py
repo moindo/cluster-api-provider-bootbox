@@ -29,14 +29,14 @@ APPS = {
             "release.cozystack.io/helm-install-timeout": "15m",
             "release.cozystack.io/helm-install-disable-wait": "true",
         }),
-    "baremetal-server": dict(
-        kind="BareMetalServer", singular="baremetalserver", plural="baremetalservers",
-        prefix="baremetal-server-", category="Administration", title="Bare Metal Servers",
-        weight=60, tags=["bare-metal"],
-        description="Bare-metal server for BootBox provisioning (DHCP reservation, BMC, pool labels)",
-        hidden=set(), icon="baremetal.svg",
-        order=["mac", "ip", "nameServers", "timeServers", "bmc", "labels", "consumerNamespaces",
-               "maintenance", "staticAddress", "configPatches", "extraKernelArgs", "arch", "idleIPXEURL"],
+    # Admin module: one instance "baremetal" in tenant-root, like BootBox.
+    "baremetal": dict(
+        kind="BareMetal", singular="baremetal", plural="baremetals",
+        prefix="", category="Administration", title="Bare Metal", weight=60,
+        tags=["bare-metal"], icon="baremetal.svg", module=True,
+        description="Bare-metal servers for BootBox provisioning (DHCP reservations, BMC, pool labels)",
+        hidden=set(),
+        order=["defaults", "servers"],
         annotations={}),
 }
 app = APPS[chart.name]
@@ -72,6 +72,7 @@ doc = {
             "category": app["category"], "singular": app["title"], "plural": app["title"],
             "weight": app["weight"], "tags": app["tags"], "description": app["description"],
             "icon": icon, "keysOrder": keys,
+            **({"module": True, "name": chart.name} if app.get("module") else {}),
         },
         "secrets": {"exclude": [], "include": []},
         "services": {"exclude": [], "include": []},
