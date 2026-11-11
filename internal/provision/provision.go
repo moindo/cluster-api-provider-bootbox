@@ -122,7 +122,11 @@ func (b BootURLs) path(h *infrav1.BootBoxHost, token, file string) string {
 }
 
 // IPXE is the URL smee hands to the host's iPXE.
-func (b BootURLs) IPXE(h *infrav1.BootBoxHost, token string) string { return b.path(h, token, "boot.ipxe") }
+func (b BootURLs) IPXE(h *infrav1.BootBoxHost, token string) string {
+	return b.path(h, token, "boot.ipxe")
+}
 
 // Config is the URL Talos fetches its machine config from.
-func (b BootURLs) Config(h *infrav1.BootBoxHost, token string) string { return b.path(h, token, "config") }
+func (b BootURLs) Config(h *infrav1.BootBoxHost, token string) string {
+	return b.path(h, token, "config")
+}
