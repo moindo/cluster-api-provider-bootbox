@@ -1,0 +1,11 @@
+image:
+  tag: sha-4b0a87a
+boot:
+  baseURL: http://pxe.infra.kite.ume.de/capi
+  kernelURL: http://pxe.infra.kite.ume.de/assets/vmlinuz
+  initrdURL: http://pxe.infra.kite.ume.de/assets/initramfs.xz
+  idleIPXEURL: http://pxe.infra.kite.ume.de/boot.ipxe
+podAnnotations:
+  k8s.v1.cni.cncf.io/networks: ship-mgmt
+nodeSelector:
+  node-role.kubernetes.io/control-plane: ""

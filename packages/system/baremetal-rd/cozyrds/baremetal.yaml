@@ -15,7 +15,8 @@
     },
     "release": {
       "labels": {
-        "sharding.fluxcd.io/key": "tenants"
+        "sharding.fluxcd.io/key": "tenants",
+        "internal.cozystack.io/tenantmodule": "true"
       },
       "prefix": "",
       "chartRef": {

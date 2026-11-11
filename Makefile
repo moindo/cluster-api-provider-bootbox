@@ -13,6 +13,7 @@ generate: $(CONTROLLER_GEN) ## Generate deepcopy code, CRDs and RBAC.
 	$(CONTROLLER_GEN) object:headerFile=hack/boilerplate.go.txt paths=./api/...
 	$(CONTROLLER_GEN) crd rbac:roleName=manager-role paths=./... \
 		output:crd:artifacts:config=config/crd/bases output:rbac:artifacts:config=config/rbac
+	python3 hack/gen-provider-chart.py packages/system/cluster-api-provider-bootbox
 
 .PHONY: test
 test:

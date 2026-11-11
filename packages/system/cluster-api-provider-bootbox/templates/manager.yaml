@@ -1,0 +1,91 @@
+{{- range $k := list "tag" }}{{ if not (get $.Values.image $k) }}{{ fail (printf "image.%s is required" $k) }}{{ end }}{{ end }}
+{{- range $k := list "baseURL" "kernelURL" "initrdURL" }}{{ if not (get $.Values.boot $k) }}{{ fail (printf "boot.%s is required" $k) }}{{ end }}{{ end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: capi-bootbox-controller-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    control-plane: controller-manager
+    app.kubernetes.io/name: cluster-api-provider-bootbox
+spec:
+  # One replica: the BMC network attachment usually carries a static address.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      control-plane: controller-manager
+  template:
+    metadata:
+      labels:
+        control-plane: controller-manager
+        app.kubernetes.io/name: cluster-api-provider-bootbox
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: capi-bootbox-controller-manager
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: manager
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          args:
+            - --leader-elect
+            - --host-namespace={{ .Values.hostNamespace | default .Release.Namespace }}
+            - --boot-base-url={{ .Values.boot.baseURL }}
+            - --kernel-url={{ .Values.boot.kernelURL }}
+            - --initrd-url={{ .Values.boot.initrdURL }}
+            {{- with .Values.boot.idleIPXEURL }}
+            - --idle-ipxe-url={{ . }}
+            {{- end }}
+            {{- with .Values.boot.kernelArgs }}
+            - --kernel-args={{ . }}
+            {{- end }}
+            {{- with .Values.boot.wipeKernelArgs }}
+            - --wipe-kernel-args={{ . }}
+            {{- end }}
+            - --boot-timeout={{ .Values.boot.timeout }}
+            - --max-boot-attempts={{ .Values.boot.maxAttempts }}
+            - --inspect-interval={{ .Values.inspectInterval }}
+          ports:
+            - {name: boot, containerPort: 8082}
+            - {name: metrics, containerPort: 8080}
+            - {name: probes, containerPort: 8081}
+          livenessProbe:
+            httpGet: {path: /healthz, port: probes}
+          readinessProbe:
+            httpGet: {path: /readyz, port: probes}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: capi-bootbox-boot
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: cluster-api-provider-bootbox
+spec:
+  selector:
+    control-plane: controller-manager
+  ports:
+    - {name: http, port: 80, targetPort: boot}

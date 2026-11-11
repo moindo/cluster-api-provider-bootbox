@@ -1,0 +1,38 @@
+# Installed by the Cozystack package moindo.baremetal-application next to the
+# BareMetal module; set the site values through the Package's
+# spec.components.cluster-api-provider-bootbox.values.
+
+image:
+  repository: ghcr.io/moindo/cluster-api-provider-bootbox
+  # Required: the image tag (sha-<commit>) matching the package commit.
+  tag: ""
+
+# Namespace of the BootBoxHosts and Tinkerbell Hardware; default: the
+# release namespace (run the provider next to smee, in cozy-bootbox).
+hostNamespace: ""
+
+boot:
+  # Required: URL of the boot server as booting hosts reach it (keep it short:
+  # the iPXE URL must fit the 128-byte DHCP boot file field).
+  baseURL: ""
+  # Required: Talos PXE assets, e.g. the BootBox matchbox assets.
+  kernelURL: ""
+  initrdURL: ""
+  # iPXE URL restored on a Hardware reservation when its host is idle.
+  idleIPXEURL: ""
+  # Optional overrides of the provider defaults (comma-separated).
+  kernelArgs: ""
+  wipeKernelArgs: ""
+  timeout: 15m
+  maxAttempts: 3
+
+inspectInterval: 10m
+
+# The pod needs a route to the BMCs, e.g. a Multus attachment:
+#   podAnnotations: {k8s.v1.cni.cncf.io/networks: ship-mgmt}
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+resources:
+  requests: {cpu: 10m, memory: 64Mi}
+  limits: {memory: 256Mi}
