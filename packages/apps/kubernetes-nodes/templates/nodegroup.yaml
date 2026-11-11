@@ -46,9 +46,8 @@
        provider, PXE-booted over Redfish. They sit outside the cluster network,
        like proxmox workers: they need their own resolvers and an apiserver
        address they can route to. */}}
-{{-   if not $.Values.bootbox.dnsServers }}
-{{-     fail "substrate bootbox requires bootbox.dnsServers: a bare-metal worker cannot resolve through the management cluster's CoreDNS" }}
-{{-   end }}
+{{- /* bootbox.dnsServers and nodeSubnets are optional: the provider fills
+       them from each server's DHCP reservation. */}}
 {{-   if not $.Values.bootbox.hostSelector }}
 {{-     fail "substrate bootbox requires bootbox.hostSelector: without labels the pool would claim any host its namespace may use" }}
 {{-   end }}

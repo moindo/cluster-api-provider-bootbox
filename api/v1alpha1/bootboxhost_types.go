@@ -107,6 +107,12 @@ type BootBoxHostSpec struct {
 	// +optional
 	ConfigPatches []ConfigPatch `json:"configPatches,omitempty"`
 
+	// ExtraDocuments are machine config documents (multi-document YAML) for
+	// this host, typically from its hardware profile, e.g. a BondConfig. A
+	// document replaces one of the same kind and name in the pool's config.
+	// +optional
+	ExtraDocuments string `json:"extraDocuments,omitempty"`
+
 	// ExtraKernelArgs are appended to the kernel command line of the
 	// provisioning boot.
 	// +optional

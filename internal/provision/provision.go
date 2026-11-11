@@ -59,7 +59,11 @@ func Hostname(h *infrav1.BootBoxHost, r hardware.Reservation) string {
 
 // Settings returns the per-host changes applied to the served config.
 func Settings(h *infrav1.BootBoxHost, r hardware.Reservation) talosconfig.HostSettings {
-	s := talosconfig.HostSettings{Hostname: Hostname(h, r), ProviderID: ProviderID(h)}
+	s := talosconfig.HostSettings{
+		Hostname: Hostname(h, r), ProviderID: ProviderID(h),
+		Nameservers: r.NameServers, NodeSubnet: r.Subnet(),
+		ExtraDocuments: []byte(h.Spec.ExtraDocuments),
+	}
 	for _, p := range h.Spec.ConfigPatches {
 		s.Patches = append(s.Patches, talosconfig.Patch{Kind: p.Kind, Name: p.Name, Merge: p.Patch.Raw})
 	}

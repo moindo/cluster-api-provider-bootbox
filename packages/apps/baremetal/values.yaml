@@ -21,6 +21,16 @@ defaults:
   timeServers: []
   idleIPXEURL: ""
 
+## @typedef {struct} Profile - Hardware profile: machine config shared by servers of one model.
+## @field {map[string]string} [installDiskSelector] - Talos install disk selector, e.g. {model: MTFDDAV480TDS}.
+## @field {string} [installImage] - Talos installer image for this hardware, e.g. a factory image with GPU drivers. Keep its Talos version equal to the pools' talos.version.
+## @field {[]string} [kernelModules] - Kernel modules to load, e.g. nvidia.
+## @field {map[string]string} [sysctls] - Kernel sysctls.
+## @field {string} [extraDocuments] - Machine config documents (YAML), e.g. the BondConfig of the chassis. Server addresses go into the server's staticAddress.
+
+## @param {map[string]Profile} profiles - Hardware profiles, referenced by servers[].profile.
+profiles: {}
+
 ## @typedef {struct} BMC - Redfish endpoint of a server.
 ## @field {string} address - Redfish base URL, e.g. https://10.0.0.10.
 ## @field {string} [credentialsSecret] - Secret in cozy-bootbox with keys username and password; defaults to <name>-bmc. Create it by hand, credentials never go into this spec.
@@ -37,6 +47,7 @@ defaults:
 ## @field {string} name - Server and node hostname (DNS label).
 ## @field {string} mac - MAC address of the PXE network interface.
 ## @field {string} ip - Reserved IPv4 address.
+## @field {string} [profile] - Hardware profile (key of profiles).
 ## @field {BMC} bmc - Baseboard management controller.
 ## @field {map[string]string} [labels] - Labels on the BootBoxHost; KubernetesNodes pools with substrate bootbox select hosts by them.
 ## @field {[]string} [consumerNamespaces] - Tenant namespaces whose pools may claim this server.
