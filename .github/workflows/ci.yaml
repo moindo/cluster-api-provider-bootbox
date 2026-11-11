@@ -21,6 +21,16 @@ jobs:
         run: make generate && git diff --exit-code
       - run: make test
 
+  charts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Render baremetal-nodes with the bootbox substrate
+        run: helm template baremetal-nodes-training-gpu packages/apps/baremetal-nodes --namespace tenant-training --values packages/apps/baremetal-nodes/tests/values-bootbox.yaml > /dev/null
+      - name: ApplicationDefinition is up to date
+        run: make -C packages/system/baremetal-nodes-rd generate && git diff --exit-code
+
   image:
     needs: test
     if: github.event_name != 'pull_request'

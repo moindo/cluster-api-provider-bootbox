@@ -1,0 +1,4 @@
+apiVersion: v2
+name: baremetal-nodes-rd
+description: ApplicationDefinition for BareMetalNodes (bare-metal worker pools)
+version: 0.1.0
