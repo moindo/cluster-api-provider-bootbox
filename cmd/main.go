@@ -29,10 +29,13 @@ import (
 	"github.com/moindo/cluster-api-provider-bootbox/internal/redfish"
 )
 
-// Kernel arguments of the BootBox matchbox "default" profile, plus a wipe of
-// the system disk so a reused host never boots its previous STATE.
+// Kernel arguments of the BootBox matchbox "default" profile.
 const defaultKernelArgs = "initrd=initramfs.xz,init_on_alloc=1,slab_nomerge,pti=on,console=tty0,console=ttyS0," +
-	"printk.devkmsg=on,talos.platform=metal,talos.experimental.wipe=system"
+	"printk.devkmsg=on,talos.platform=metal"
+
+// The first boot of a provisioning wipes the system disk, so a reused host
+// never boots its previous STATE. Talos reboots after the wipe.
+const defaultWipeArgs = "talos.experimental.wipe=system"
 
 func main() {
 	var (
@@ -40,6 +43,7 @@ func main() {
 		leaderElect                      bool
 		hostNamespace, bootBaseURL       string
 		kernelURL, initrdURL, kernelArgs string
+		wipeArgs                         string
 		idleIPXEURL                      string
 		bootTimeout, inspectInterval     time.Duration
 		maxBootAttempts                  int
@@ -53,6 +57,7 @@ func main() {
 	flag.StringVar(&kernelURL, "kernel-url", "", "URL of the Talos PXE kernel.")
 	flag.StringVar(&initrdURL, "initrd-url", "", "URL of the Talos PXE initramfs.")
 	flag.StringVar(&kernelArgs, "kernel-args", defaultKernelArgs, "Comma-separated kernel arguments of the provisioning boot.")
+	flag.StringVar(&wipeArgs, "wipe-kernel-args", defaultWipeArgs, "Comma-separated kernel arguments added to the first boot of a provisioning only.")
 	flag.StringVar(&idleIPXEURL, "idle-ipxe-url", "", "iPXE URL restored on the Hardware when a host is not provisioning.")
 	flag.DurationVar(&bootTimeout, "boot-timeout", 15*time.Minute, "Time to wait for the config fetch before booting again.")
 	flag.IntVar(&maxBootAttempts, "max-boot-attempts", 3, "PXE boot requests per provisioning.")
@@ -114,7 +119,7 @@ func main() {
 
 	boot := &bootserver.Server{
 		Client: mgr.GetClient(), URLs: urls, HostNamespace: hostNamespace,
-		KernelURL: kernelURL, InitrdURL: initrdURL, KernelArgs: splitArgs(kernelArgs),
+		KernelURL: kernelURL, InitrdURL: initrdURL, KernelArgs: splitArgs(kernelArgs), WipeArgs: splitArgs(wipeArgs),
 	}
 	if err := mgr.Add(&httpRunnable{addr: bootAddr, handler: boot.Handler()}); err != nil {
 		logger.Error(err, "adding boot server")

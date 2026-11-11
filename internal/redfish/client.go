@@ -166,11 +166,16 @@ func (c *client) Inspect(ctx context.Context) (Info, error) {
 
 func (c *client) PXEBootOnce(ctx context.Context) error {
 	return c.withSystem(ctx, func(s *schemas.ComputerSystem) error {
-		return s.SetBoot(&schemas.Boot{
+		boot := &schemas.Boot{
 			BootSourceOverrideTarget:  schemas.PxeBootSource,
 			BootSourceOverrideEnabled: schemas.OnceBootSourceOverrideEnabled,
-			BootSourceOverrideMode:    schemas.UEFIBootSourceOverrideMode,
-		})
+		}
+		// Only send the mode when it changes: Dell iDRACs turn a mode write
+		// into a BIOS configuration job with an extra reboot.
+		if s.Boot.BootSourceOverrideMode != schemas.UEFIBootSourceOverrideMode {
+			boot.BootSourceOverrideMode = schemas.UEFIBootSourceOverrideMode
+		}
+		return s.SetBoot(boot)
 	})
 }
 

@@ -130,6 +130,10 @@ type ProvisioningStatus struct {
 	// BootAttempts counts PXE boot requests of the current provisioning.
 	// +optional
 	BootAttempts int32 `json:"bootAttempts,omitempty"`
+	// IPXEServedAt is when the host first fetched its iPXE script. Only that
+	// first boot carries the disk wipe: Talos reboots after wiping.
+	// +optional
+	IPXEServedAt *metav1.Time `json:"ipxeServedAt,omitempty"`
 	// ConfigServedAt is when the host fetched its machine config.
 	// +optional
 	ConfigServedAt *metav1.Time `json:"configServedAt,omitempty"`

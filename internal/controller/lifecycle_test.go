@@ -150,7 +150,7 @@ func newEnv(t *testing.T, objs ...client.Object) *env {
 	base, _ := url.Parse(e.server.URL + "/capi")
 	urls := provision.BootURLs{Base: base}
 	bs := &bootserver.Server{Client: c, URLs: urls, HostNamespace: hostNS, KernelURL: "http://pxe/assets/vmlinuz", InitrdURL: "http://pxe/assets/initramfs.xz",
-		KernelArgs: []string{"talos.platform=metal", "talos.experimental.wipe=system"}, Now: clock}
+		KernelArgs: []string{"talos.platform=metal"}, WipeArgs: []string{"talos.experimental.wipe=system"}, Now: clock}
 	mux.Handle("/", bs.Handler())
 
 	e.r = &MachineReconciler{Client: c, BMC: factory, URLs: urls, HostNamespace: hostNS,
@@ -239,6 +239,11 @@ func TestLifecycle(t *testing.T) {
 	if code != http.StatusOK || !strings.Contains(script, "talos.experimental.wipe=system") ||
 		!strings.Contains(script, "talos.config="+strings.Replace(res.IPXEURL, "/i/", "/c/", 1)) {
 		t.Fatalf("iPXE %d:\n%s", code, script)
+	}
+
+	// Talos reboots after the wipe; the next boot must install, not wipe again.
+	if code, again := e.get(res.IPXEURL); code != http.StatusOK || strings.Contains(again, "talos.experimental.wipe") {
+		t.Fatalf("second iPXE %d:\n%s", code, again)
 	}
 
 	// Config is the bootstrap data plus host settings.
