@@ -23,6 +23,13 @@
 {{- if not (regexMatch `^https?://` (dig "bmc" "address" "" $s)) }}
 {{- fail (printf "servers[%d] (%s): bmc.address must be a Redfish URL" $i $s.name) }}
 {{- end }}
+{{- $profile := dict }}
+{{- with $s.profile }}
+{{-   if not (hasKey $.Values.profiles .) }}
+{{-     fail (printf "servers[%d] (%s): profile %q is not defined in profiles" $i $s.name .) }}
+{{-   end }}
+{{-   $profile = get $.Values.profiles . }}
+{{- end }}
 {{- $netmask := $s.netmask | default $d.netmask }}
 {{- $gateway := $s.gateway | default $d.gateway }}
 ---
@@ -97,7 +104,33 @@ spec:
     {{- with $s.bmc.systemID }}
     systemID: {{ . }}
     {{- end }}
+  {{- with $profile.extraDocuments }}
+  extraDocuments: |
+    {{- . | trim | nindent 4 }}
+  {{- end }}
   {{- $patches := list }}
+  {{- /* Profile first, so server patches can refine it. */}}
+  {{- $machine := dict }}
+  {{- $install := dict }}
+  {{- with $profile.installDiskSelector }}
+  {{-   $_ := set $install "diskSelector" . }}
+  {{-   $_ := set $install "disk" nil }}
+  {{- end }}
+  {{- with $profile.installImage }}
+  {{-   $_ := set $install "image" . }}
+  {{- end }}
+  {{- if $install }}{{ $_ := set $machine "install" $install }}{{ end }}
+  {{- with $profile.kernelModules }}
+  {{-   $mods := list }}
+  {{-   range . }}{{ $mods = append $mods (dict "name" .) }}{{ end }}
+  {{-   $_ := set $machine "kernel" (dict "modules" $mods) }}
+  {{- end }}
+  {{- with $profile.sysctls }}
+  {{-   $_ := set $machine "sysctls" . }}
+  {{- end }}
+  {{- if $machine }}
+  {{-   $patches = append $patches (dict "kind" "v1alpha1" "patch" (dict "machine" $machine)) }}
+  {{- end }}
   {{- with (dig "staticAddress" "address" "" $s) }}
   {{- $patches = append $patches (dict "kind" (dig "staticAddress" "kind" "BondConfig" $s | default "BondConfig") "name" (dig "staticAddress" "link" "bond1" $s | default "bond1") "patch" (dict "addresses" (list (dict "address" .)))) }}
   {{- end }}

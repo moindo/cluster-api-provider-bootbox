@@ -134,6 +134,12 @@ spec:
                 items:
                   type: string
                 type: array
+              extraDocuments:
+                description: |-
+                  ExtraDocuments are machine config documents (multi-document YAML) for
+                  this host, typically from its hardware profile, e.g. a BondConfig. A
+                  document replaces one of the same kind and name in the pool's config.
+                type: string
               extraKernelArgs:
                 description: |-
                   ExtraKernelArgs are appended to the kernel command line of the

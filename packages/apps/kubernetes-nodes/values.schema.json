@@ -414,10 +414,10 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Labels a BootBoxHost must carry to be claimed by this pool. Hosts also have to admit the pool's namespace (spec.consumerNamespaces). Required."
+          "description": "Labels a server (BareMetal module) must carry to be claimed by this pool; it must also list this namespace in consumerNamespaces. Required."
         },
         "dnsServers": {
-          "description": "Nameservers written into the worker machineconfig. Required.",
+          "description": "Nameservers for the workers. Empty: the provider uses the resolvers of each server's DHCP reservation (BareMetal module).",
           "type": "array",
           "default": [],
           "items": {
@@ -430,7 +430,7 @@
           "default": ""
         },
         "nodeSubnets": {
-          "description": "CIDRs the kubelet picks its node IP from on multi-homed servers.",
+          "description": "CIDRs the kubelet picks its node IP from. Empty: the provider uses the subnet of each server's DHCP reservation.",
           "type": "array",
           "default": [],
           "items": {
@@ -443,7 +443,7 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Talos install disk selector (e.g. model). Takes precedence over installDisk."
+          "description": "Install disk selector for the whole pool. Prefer the hardware profile of the servers in the BareMetal module."
         },
         "installDisk": {
           "description": "Install disk path when no selector is set. Defaults to /dev/sda.",
@@ -456,10 +456,10 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Extra kernel sysctls."
+          "description": "Extra kernel sysctls for the whole pool. Prefer the hardware profile in the BareMetal module."
         },
         "extraDocuments": {
-          "description": "Additional Talos machine config documents (multi-document YAML), e.g. a BondConfig. Host-specific values belong in the BootBoxHost configPatches.",
+          "description": "Additional Talos machine config documents for the whole pool. Prefer the hardware profile in the BareMetal module (per-server documents replace pool documents of the same kind and name).",
           "type": "string",
           "default": ""
         }

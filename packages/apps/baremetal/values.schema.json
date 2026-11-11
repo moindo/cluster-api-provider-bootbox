@@ -40,6 +40,45 @@
         }
       }
     },
+    "profiles": {
+      "description": "Hardware profiles (machine config shared by servers of one model), referenced by servers[].profile.",
+      "type": "object",
+      "default": {},
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "installDiskSelector": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Talos install disk selector, e.g. {model: MTFDDAV480TDS}."
+          },
+          "installImage": {
+            "description": "Talos installer image for this hardware (e.g. with GPU drivers); keep its Talos version equal to the pools' talos.version.",
+            "type": "string"
+          },
+          "kernelModules": {
+            "description": "Kernel modules to load, e.g. nvidia.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sysctls": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Kernel sysctls."
+          },
+          "extraDocuments": {
+            "description": "Machine config documents (YAML), e.g. the chassis BondConfig. Server addresses go into staticAddress.",
+            "type": "string"
+          }
+        }
+      }
+    },
     "servers": {
       "description": "Registered servers. BMC credentials live in hand-made Secrets cozy-bootbox/<name>-bmc.",
       "type": "array",
@@ -174,6 +213,10 @@
           },
           "gateway": {
             "description": "Overrides defaults.gateway.",
+            "type": "string"
+          },
+          "profile": {
+            "description": "Hardware profile (key of profiles).",
             "type": "string"
           }
         }

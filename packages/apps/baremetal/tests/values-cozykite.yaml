@@ -4,8 +4,29 @@ defaults:
   nameServers: [10.249.13.1, 10.249.13.23]
   timeServers: [time.uk-essen.de]
   idleIPXEURL: http://pxe.infra.kite.ume.de/boot.ipxe
+profiles:
+  xa:
+    installDiskSelector:
+      model: MTFDDAV480TDS
+    installImage: factory.talos.dev/metal-installer/4582a2ee2a9dfb3bfbe5e18ee646ddfd9dfd6b1cf0abf65473583a6087f0343d:v1.14.2
+    kernelModules: [nvidia, nvidia_uvm, nvidia_drm, nvidia_modeset]
+    sysctls:
+      net.core.bpf_jit_harden: "1"
+    extraDocuments: |
+      apiVersion: v1alpha1
+      kind: BondConfig
+      name: bond1
+      links: [ens3f0np0, ens3f1np1]
+      bondMode: 802.3ad
+      xmitHashPolicy: layer2+3
+      lacpRate: fast
+      miimon: 100
+      mtu: 9000
+      routes:
+        - gateway: 172.19.24.1
 servers:
   - name: xa06
+    profile: xa
     mac: 40:a6:b7:96:ac:98
     ip: 172.19.24.36
     bmc:

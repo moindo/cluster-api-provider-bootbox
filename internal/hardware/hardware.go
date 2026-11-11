@@ -6,6 +6,7 @@ package hardware
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -20,8 +21,11 @@ type Reservation struct {
 	Hostname string
 	MAC      string
 	IP       string
-	IPXEURL  string
-	AllowPXE bool
+	Netmask  string
+	// NameServers are the resolvers handed out with the reservation.
+	NameServers []string
+	IPXEURL     string
+	AllowPXE    bool
 }
 
 // Get loads a Hardware object.
@@ -59,6 +63,8 @@ func ReservationOf(u *unstructured.Unstructured) (Reservation, error) {
 	r.Hostname, _, _ = unstructured.NestedString(iface, "dhcp", "hostname")
 	r.MAC, _, _ = unstructured.NestedString(iface, "dhcp", "mac")
 	r.IP, _, _ = unstructured.NestedString(iface, "dhcp", "ip", "address")
+	r.Netmask, _, _ = unstructured.NestedString(iface, "dhcp", "ip", "netmask")
+	r.NameServers, _, _ = unstructured.NestedStringSlice(iface, "dhcp", "name_servers")
 	r.IPXEURL, _, _ = unstructured.NestedString(iface, "netboot", "ipxe", "url")
 	r.AllowPXE, _, _ = unstructured.NestedBool(iface, "netboot", "allowPXE")
 	return r, nil
@@ -95,4 +101,20 @@ func SetNetboot(u *unstructured.Unstructured, ipxeURL string, allowPXE bool) (bo
 		return false, nil
 	}
 	return true, unstructured.SetNestedSlice(u.Object, ifaces, "spec", "interfaces")
+}
+
+// Subnet returns the reservation's network in CIDR notation, or "" when the
+// address or netmask is missing or malformed.
+func (r Reservation) Subnet() string {
+	ip := net.ParseIP(r.IP).To4()
+	mask := net.ParseIP(r.Netmask).To4()
+	if ip == nil || mask == nil {
+		return ""
+	}
+	m := net.IPMask(mask)
+	ones, bits := m.Size()
+	if bits == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s/%d", ip.Mask(m), ones)
 }

@@ -187,7 +187,7 @@ proxmox:
 
 ## @typedef {struct} Bootbox - Bare-metal substrate settings. Ignored unless `substrate` is `bootbox`.
 ## @field {map[string]string} hostSelector - Labels a BootBoxHost must carry to be claimed by this pool. Hosts also have to admit the pool's namespace (`spec.consumerNamespaces`). Required when `substrate` is `bootbox`.
-## @field {[]string} dnsServers - Nameservers written into the worker machineconfig; the servers cannot reach the management cluster's CoreDNS. Required when `substrate` is `bootbox`.
+## @field {[]string} [dnsServers] - Nameservers for the workers. Empty: the provider uses the resolvers of each server's DHCP reservation.
 ## @field {string} [apiServerAddress] - IPv4 address the servers reach the tenant apiserver on (a LoadBalancer in their network). Empty uses the LoadBalancer address of the control-plane Service.
 ## @field {[]string} [nodeSubnets] - CIDRs the kubelet picks its node IP from on multi-homed servers.
 ## @field {map[string]string} [installDiskSelector] - Talos install disk selector (e.g. `model`). Takes precedence over `installDisk`.

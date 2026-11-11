@@ -36,7 +36,7 @@ APPS = {
         tags=["bare-metal"], icon="baremetal.svg", module=True,
         description="Bare-metal servers for BootBox provisioning (DHCP reservations, BMC, pool labels)",
         hidden=set(),
-        order=["defaults", "servers"],
+        order=["defaults", "profiles", "servers"],
         annotations={}),
 }
 app = APPS[chart.name]
