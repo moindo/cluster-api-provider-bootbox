@@ -447,3 +447,62 @@ func TestStatusConfigMaps(t *testing.T) {
 		t.Fatal("machine entry not removed after deletion")
 	}
 }
+
+func TestLifecycleEvents(t *testing.T) {
+	objs := fixtures()
+	for _, o := range objs {
+		switch v := o.(type) {
+		case *infrav1.BootBoxMachine:
+			v.Labels[clusterv1.MachineDeploymentNameLabel] = "kubernetes-training-gpu"
+		case *infrav1.BootBoxHost:
+			v.Labels["helm.toolkit.fluxcd.io/name"] = "baremetal"
+			v.Labels["helm.toolkit.fluxcd.io/namespace"] = "tenant-root"
+			v.Status = infrav1.BootBoxHostStatus{}
+		}
+	}
+	objs = append(objs, &clusterv1.MachineDeployment{ObjectMeta: metav1.ObjectMeta{
+		Namespace: tenantNS, Name: "kubernetes-training-gpu",
+		Labels: map[string]string{"helm.toolkit.fluxcd.io/name": "kubernetes-nodes-training-gpu", "helm.toolkit.fluxcd.io/namespace": tenantNS},
+	}})
+	e := newEnv(t, objs...)
+	events := func(ns string) []corev1.Event {
+		l := &corev1.EventList{}
+		if err := e.c.List(context.Background(), l, client.InNamespace(ns)); err != nil {
+			t.Fatal(err)
+		}
+		return l.Items
+	}
+
+	hr := &HostReconciler{Client: e.c, BMC: func(redfish.Config) (redfish.BMC, error) { return e.bmc, nil }, InspectInterval: 10 * time.Minute}
+	for range 2 {
+		if _, err := hr.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKey{Namespace: hostNS, Name: "xa06"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root := events("tenant-root")
+	if len(root) != 1 || root[0].Reason != "BMCReachable" || root[0].InvolvedObject.Name != "baremetal" {
+		t.Fatalf("module events = %+v", root)
+	}
+
+	e.reconcile() // finalizer
+	e.reconcile() // claim + boot -> WaitingForConfigFetch
+	e.reconcile() // unchanged: no new event
+	pool := events(tenantNS)
+	if len(pool) != 1 || pool[0].Reason != infrav1.WaitingForConfigFetchReason || pool[0].InvolvedObject.Name != "kubernetes-nodes-training-gpu" {
+		t.Fatalf("pool events after boot = %+v", pool)
+	}
+
+	if err := e.c.Delete(context.Background(), e.bbm()); err != nil {
+		t.Fatal(err)
+	}
+	e.reconcile()
+	released := 0
+	for _, ev := range events(tenantNS) {
+		if ev.Reason == "Released" {
+			released++
+		}
+	}
+	if released != 1 {
+		t.Fatalf("want one release event, got %d", released)
+	}
+}

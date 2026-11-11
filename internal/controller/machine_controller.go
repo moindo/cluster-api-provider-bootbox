@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1 "github.com/moindo/cluster-api-provider-bootbox/api/v1alpha1"
+	"github.com/moindo/cluster-api-provider-bootbox/internal/appevents"
 	"github.com/moindo/cluster-api-provider-bootbox/internal/hardware"
 	"github.com/moindo/cluster-api-provider-bootbox/internal/provision"
 	"github.com/moindo/cluster-api-provider-bootbox/internal/redfish"
@@ -54,7 +55,7 @@ type MachineReconciler struct {
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=bootboxmachines,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=bootboxmachines/status;bootboxmachines/finalizers,verbs=get;update;patch
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=bootboxmachinetemplates,verbs=get;list;watch
-// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;clusters,verbs=get;list;watch
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machines;clusters;machinedeployments,verbs=get;list;watch
 // +kubebuilder:rbac:groups=tinkerbell.org,resources=hardware,verbs=get;list;watch;update;patch
 
 // Reconcile drives one BootBoxMachine.
@@ -83,6 +84,7 @@ func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 		return ctrl.Result{}, nil
 	}
 
+	before := conditions.Get(bbm, infrav1.HostProvisionedCondition).DeepCopy()
 	helper, err := patch.NewHelper(bbm, r.Client)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -96,6 +98,9 @@ func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 		}
 		if err := r.publish(ctx, machine, bbm); err != nil {
 			logger.Info("publishing status failed", "error", err.Error())
+		}
+		if err := r.recordTransition(ctx, bbm, before); err != nil {
+			logger.Info("recording event failed", "error", err.Error())
 		}
 	}()
 
@@ -401,13 +406,18 @@ func hostToMachine(_ context.Context, o client.Object) []reconcile.Request {
 
 // MachineSummary is what a machine publishes into its status ConfigMap.
 type MachineSummary struct {
-	Host       string `json:"host,omitempty"`
-	Node       string `json:"node,omitempty"`
-	Address    string `json:"address,omitempty"`
-	Ready      bool   `json:"ready"`
-	Phase      string `json:"phase,omitempty"`
-	Message    string `json:"message,omitempty"`
-	ProviderID string `json:"providerID,omitempty"`
+	Host string `json:"host,omitempty"`
+	Node string `json:"node,omitempty"`
+	// Machine is the Cluster API view: phase and node health.
+	Machine     string `json:"machine,omitempty"`
+	NodeHealthy string `json:"nodeHealthy,omitempty"`
+	Kubelet     string `json:"kubelet,omitempty"`
+	OS          string `json:"os,omitempty"`
+	Address     string `json:"address,omitempty"`
+	Ready       bool   `json:"ready"`
+	Phase       string `json:"phase,omitempty"`
+	Message     string `json:"message,omitempty"`
+	ProviderID  string `json:"providerID,omitempty"`
 }
 
 // publish reports the machine into the ConfigMap named by its status
@@ -439,8 +449,20 @@ func (r *MachineReconciler) publish(ctx context.Context, machine *clusterv1.Mach
 			s.Address = a.Address
 		}
 	}
-	if machine != nil && machine.Status.NodeRef != nil {
-		s.Node = machine.Status.NodeRef.Name
+	if machine != nil {
+		if machine.Status.NodeRef != nil {
+			s.Node = machine.Status.NodeRef.Name
+		}
+		s.Machine = machine.Status.Phase
+		if c := conditions.Get(machine, clusterv1.MachineNodeHealthyCondition); c != nil {
+			s.NodeHealthy = string(c.Status)
+			if c.Status != corev1.ConditionTrue && c.Reason != "" {
+				s.NodeHealthy += " (" + c.Reason + ")"
+			}
+		}
+		if ni := machine.Status.NodeInfo; ni != nil {
+			s.Kubelet, s.OS = ni.KubeletVersion, ni.OSImage
+		}
 	}
 	if c := conditions.Get(bbm, infrav1.HostProvisionedCondition); c != nil {
 		if c.Status == corev1.ConditionTrue {
@@ -450,4 +472,46 @@ func (r *MachineReconciler) publish(ctx context.Context, machine *clusterv1.Mach
 		}
 	}
 	return statuscm.Set(ctx, r.Client, key, bbm.Name, s)
+}
+
+// recordTransition records an event against the pool's release when the
+// provisioning condition of the machine changed in this reconcile.
+func (r *MachineReconciler) recordTransition(ctx context.Context, bbm *infrav1.BootBoxMachine, before *clusterv1.Condition) error {
+	after := conditions.Get(bbm, infrav1.HostProvisionedCondition)
+	deleted := !bbm.DeletionTimestamp.IsZero() && !controllerutil.ContainsFinalizer(bbm, infrav1.MachineFinalizer)
+	if !deleted && (after == nil || (before != nil && before.Status == after.Status && before.Reason == after.Reason)) {
+		return nil
+	}
+	dep := bbm.Labels[clusterv1.MachineDeploymentNameLabel]
+	if dep == "" {
+		return nil
+	}
+	md := &clusterv1.MachineDeployment{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: bbm.Namespace, Name: dep}, md); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	target, ok := appevents.TargetOf(md)
+	if !ok {
+		return nil
+	}
+	host := "-"
+	if bbm.Status.HostRef != nil {
+		host = bbm.Status.HostRef.Name
+	}
+	eventType, reason, msg := corev1.EventTypeNormal, "", ""
+	switch {
+	case deleted:
+		reason, msg = "Released", fmt.Sprintf("machine %s released host %s", bbm.Name, host)
+	case after.Status == corev1.ConditionTrue:
+		reason, msg = "Provisioned", fmt.Sprintf("host %s joined as machine %s", host, bbm.Name)
+	default:
+		reason, msg = after.Reason, fmt.Sprintf("machine %s, host %s", bbm.Name, host)
+		if after.Message != "" {
+			msg += ": " + after.Message
+		}
+		if after.Severity == clusterv1.ConditionSeverityWarning || after.Severity == clusterv1.ConditionSeverityError {
+			eventType = corev1.EventTypeWarning
+		}
+	}
+	return appevents.Record(ctx, r.Client, target, eventType, reason, msg, r.now())
 }

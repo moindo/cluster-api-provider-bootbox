@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	infrav1 "github.com/moindo/cluster-api-provider-bootbox/api/v1alpha1"
+	"github.com/moindo/cluster-api-provider-bootbox/internal/appevents"
 	"github.com/moindo/cluster-api-provider-bootbox/internal/redfish"
 	"github.com/moindo/cluster-api-provider-bootbox/internal/statuscm"
 )
@@ -77,6 +78,9 @@ func (r *HostReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 	if err := r.publish(ctx, host); err != nil {
 		log.FromContext(ctx).Info("publishing status failed", "error", err.Error())
+	}
+	if err := r.recordTransitions(ctx, base, host); err != nil {
+		log.FromContext(ctx).Info("recording event failed", "error", err.Error())
 	}
 	return ctrl.Result{RequeueAfter: r.InspectInterval}, nil
 }
@@ -200,4 +204,33 @@ func (r *HostReconciler) unpublish(ctx context.Context, h *infrav1.BootBoxHost) 
 		return nil //nolint:nilerr // a broken annotation must not block deletion
 	}
 	return statuscm.Remove(ctx, r.Client, key, h.Name)
+}
+
+// recordTransitions records BMC reachability and power changes against the
+// release that owns the host (the BareMetal module). Provisioning states are
+// recorded by the machine controller against the pool.
+func (r *HostReconciler) recordTransitions(ctx context.Context, before, after *infrav1.BootBoxHost) error {
+	target, ok := appevents.TargetOf(after)
+	if !ok {
+		return nil
+	}
+	now := r.now()
+	b := meta.FindStatusCondition(before.Status.Conditions, infrav1.ConditionBMCReachable)
+	a := meta.FindStatusCondition(after.Status.Conditions, infrav1.ConditionBMCReachable)
+	if a != nil && (b == nil || b.Status != a.Status) {
+		if a.Status == metav1.ConditionTrue {
+			if err := appevents.Record(ctx, r.Client, target, corev1.EventTypeNormal, "BMCReachable",
+				fmt.Sprintf("server %s: BMC reachable (%s %s)", after.Name, after.Status.Hardware.Manufacturer, after.Status.Hardware.Model), now); err != nil {
+				return err
+			}
+		} else if err := appevents.Record(ctx, r.Client, target, corev1.EventTypeWarning, "BMCUnreachable",
+			fmt.Sprintf("server %s: %s", after.Name, a.Message), now.Add(time.Millisecond)); err != nil {
+			return err
+		}
+	}
+	if p, q := before.Status.Hardware.PowerState, after.Status.Hardware.PowerState; p != "" && q != "" && p != q {
+		return appevents.Record(ctx, r.Client, target, corev1.EventTypeNormal, "Power",
+			fmt.Sprintf("server %s: power %s -> %s", after.Name, p, q), now.Add(2*time.Millisecond))
+	}
+	return nil
 }
