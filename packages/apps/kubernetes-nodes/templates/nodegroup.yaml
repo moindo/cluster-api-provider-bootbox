@@ -899,14 +899,15 @@ spec:
 {{-   end }}
 {{- end }}
 {{/* Guard: explicit kubelet overrides require effective memory for validation */}}
-{{- if not $effectiveMemory }}
+{{- /* bootbox: the server's size comes from the hardware, not the pool; the reservations apply as given. */}}
+{{- if and (not $effectiveMemory) (not $isBootbox) }}
 {{-   $hasOverride := or $kubeletOverride.systemReservedMemory $kubeletOverride.kubeReservedMemory $kubeletOverride.evictionHardMemory $kubeletOverride.evictionSoftMemory }}
 {{-   if $hasOverride }}
 {{-     fail (printf "nodeGroup %s: kubelet memory reservations require effective memory to validate — set resources.memory or instanceType" $groupName) }}
 {{-   end }}
 {{- end }}
 {{/* Guard: explicit kubelet CPU overrides require effective CPU for validation */}}
-{{- if not $effectiveCpu }}
+{{- if and (not $effectiveCpu) (not $isBootbox) }}
 {{-   $hasCpuOverride := or $kubeletOverride.systemReservedCpu $kubeletOverride.kubeReservedCpu }}
 {{-   if $hasCpuOverride }}
 {{-     fail (printf "nodeGroup %s: cannot validate kubelet CPU reservations without effective CPU — set resources.cpu or a valid instanceType" $groupName) }}
