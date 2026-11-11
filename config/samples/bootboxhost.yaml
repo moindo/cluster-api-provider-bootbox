@@ -1,0 +1,24 @@
+# A Dell server registered with BootBox. The Tinkerbell Hardware "xa06" holds
+# its DHCP reservation; the Secret "xa06-bmc" holds username/password of an
+# iDRAC account with the Operator role.
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: BootBoxHost
+metadata:
+  name: xa06
+  namespace: cozy-bootbox
+  labels:
+    chassis: xa
+spec:
+  hardwareName: xa06
+  bmc:
+    address: https://10.99.121.22
+    credentialsName: xa06-bmc
+    certificateFingerprint: E9:82:F9:2A:D5:08:5A:3A:84:83:F9:DF:BA:96:DF:97:FB:22:5A:E5:E5:45:C5:31:48:1B:48:91:40:08:76:10
+    systemID: System.Embedded.1
+  consumerNamespaces: [tenant-training]
+  configPatches:
+    - kind: BondConfig
+      name: bond1
+      patch:
+        addresses:
+          - address: 172.19.24.36/21

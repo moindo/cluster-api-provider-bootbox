@@ -1,0 +1,12 @@
+# Lets the core Cluster API controllers read and update the infrastructure
+# objects of this provider (aggregated into the CAPI manager role).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: capi-aggregation
+  labels:
+    cluster.x-k8s.io/aggregate-to-manager: "true"
+rules:
+  - apiGroups: [infrastructure.cluster.x-k8s.io]
+    resources: [bootboxmachines, bootboxmachinetemplates]
+    verbs: [get, list, watch, create, update, patch, delete]
