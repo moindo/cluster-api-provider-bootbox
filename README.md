@@ -31,9 +31,12 @@ BootBoxHost (inventory, cozy-bootbox)        BootBoxMachine (per Machine, tenant
 4. Over Redfish it requests a one-time UEFI PXE boot and power-cycles the
    server.
 5. smee answers DHCP and chains iPXE to the provider's boot server. The
-   script boots the Talos kernel with `talos.experimental.wipe=system` (a
-   reused disk never boots its previous `STATE`) and
-   `talos.config=<boot-base-url>/c/<host>/<token>`.
+   first script of a provisioning boots the Talos kernel with
+   `talos.experimental.wipe=system` (`--wipe-kernel-args`), so a reused disk
+   never boots its previous `STATE`; Talos reboots after the wipe. Later
+   scripts boot with `talos.config=<boot-base-url>/c/<host>/<token>` and
+   install. The boot order must fall back to PXE when the disk is empty,
+   otherwise the provider's boot retry requests the second PXE boot.
 6. Talos fetches its config: the CABPT bootstrap data plus the host's
    hostname, `machine.kubelet.extraConfig.providerID =
    bootbox://<ns>/<host>` and the host's `configPatches` (JSON merge patches
@@ -70,7 +73,8 @@ Run it in the namespace of the Tinkerbell `Hardware` objects (or set
 |---|---|
 | `--boot-base-url` | URL of the boot server as reachable by booting hosts (expose the `boot` Service, e.g. under a path of the PXE ingress). Keep it short: the iPXE URL travels in the 128-byte DHCP boot file field (the provider refuses longer URLs). |
 | `--kernel-url`, `--initrd-url` | Talos PXE assets, e.g. matchbox `/assets/vmlinuz` and `/assets/initramfs.xz`. |
-| `--kernel-args` | Comma-separated kernel arguments (default: matchbox defaults plus the wipe). |
+| `--kernel-args` | Comma-separated kernel arguments (default: matchbox defaults). |
+| `--wipe-kernel-args` | Added to the first boot of a provisioning only (default `talos.experimental.wipe=system`). |
 | `--idle-ipxe-url` | iPXE URL restored on the Hardware after provisioning. |
 | `--boot-timeout`, `--max-boot-attempts`, `--inspect-interval` | Timing. |
 

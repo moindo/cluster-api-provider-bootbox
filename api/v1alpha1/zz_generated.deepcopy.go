@@ -423,6 +423,14 @@ func (in *ProvisioningStatus) DeepCopyInto(out *ProvisioningStatus) {
 		in, out := &in.BootRequestedAt, &out.BootRequestedAt
 		*out = (*in).DeepCopy()
 	}
+	if in.IPXEServedAt != nil {
+		in, out := &in.IPXEServedAt, &out.IPXEServedAt
+		*out = (*in).DeepCopy()
+	}
+	if in.LastIPXEServedAt != nil {
+		in, out := &in.LastIPXEServedAt, &out.LastIPXEServedAt
+		*out = (*in).DeepCopy()
+	}
 	if in.ConfigServedAt != nil {
 		in, out := &in.ConfigServedAt, &out.ConfigServedAt
 		*out = (*in).DeepCopy()

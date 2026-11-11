@@ -179,7 +179,13 @@ func (r *MachineReconciler) reconcileNormal(ctx context.Context, machine *cluste
 	}
 
 	p := host.Status.Provisioning
-	timedOut := p.BootRequestedAt != nil && r.now().Sub(p.BootRequestedAt.Time) >= r.BootTimeout
+	// Count from the latest sign of life: a host that fetched its iPXE
+	// script after the boot request is booting and must not be reset.
+	since := p.BootRequestedAt
+	if p.LastIPXEServedAt != nil && (since == nil || p.LastIPXEServedAt.After(since.Time)) {
+		since = p.LastIPXEServedAt
+	}
+	timedOut := since != nil && r.now().Sub(since.Time) >= r.BootTimeout
 	switch {
 	case p.BootRequestedAt == nil || (timedOut && p.BootAttempts < r.MaxBootAttempts):
 		if err := r.bootHost(ctx, host); err != nil {

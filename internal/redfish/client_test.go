@@ -16,6 +16,7 @@ import (
 type fakeRedfish struct {
 	mu      sync.Mutex
 	power   string
+	mode    string
 	patches []string
 	resets  []string
 }
@@ -42,7 +43,7 @@ func (f *fakeRedfish) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"@odata.id": "/redfish/v1/Systems/System.Embedded.1", "Id": "System.Embedded.1",
 			"Manufacturer": "Dell Inc.", "Model": "PowerEdge R750xa", "SerialNumber": "G2B32S3",
 			"BiosVersion": "1.23.1", "PowerState": f.power,
-			"Boot": map[string]any{"BootSourceOverrideTarget": "None", "BootSourceOverrideEnabled": "Disabled"},
+			"Boot": map[string]any{"BootSourceOverrideTarget": "None", "BootSourceOverrideEnabled": "Disabled", "BootSourceOverrideMode": f.mode},
 			"Actions": map[string]any{"#ComputerSystem.Reset": map[string]any{
 				"target": "/redfish/v1/Systems/System.Embedded.1/Actions/ComputerSystem.Reset"}},
 		})
@@ -135,5 +136,18 @@ func TestParseFingerprint(t *testing.T) {
 	}
 	if _, err := ParseFingerprint("abcd"); err == nil {
 		t.Fatal("short fingerprint accepted")
+	}
+}
+
+func TestPXEBootOnceKeepsModeWhenAlreadyUEFI(t *testing.T) {
+	f := &fakeRedfish{power: "On", mode: "UEFI"}
+	srv := httptest.NewTLSServer(f)
+	defer srv.Close()
+	bmc, _ := New(Config{Address: srv.URL, Username: "op", Password: "pw", Fingerprint: fingerprintOf(t, srv)})
+	if err := bmc.PXEBootOnce(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.patches) != 1 || strings.Contains(f.patches[0], "BootSourceOverrideMode") {
+		t.Fatalf("mode must not be sent when unchanged: %v", f.patches)
 	}
 }

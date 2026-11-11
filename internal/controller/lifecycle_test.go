@@ -150,7 +150,7 @@ func newEnv(t *testing.T, objs ...client.Object) *env {
 	base, _ := url.Parse(e.server.URL + "/capi")
 	urls := provision.BootURLs{Base: base}
 	bs := &bootserver.Server{Client: c, URLs: urls, HostNamespace: hostNS, KernelURL: "http://pxe/assets/vmlinuz", InitrdURL: "http://pxe/assets/initramfs.xz",
-		KernelArgs: []string{"talos.platform=metal", "talos.experimental.wipe=system"}, Now: clock}
+		KernelArgs: []string{"talos.platform=metal"}, WipeArgs: []string{"talos.experimental.wipe=system"}, Now: clock}
 	mux.Handle("/", bs.Handler())
 
 	e.r = &MachineReconciler{Client: c, BMC: factory, URLs: urls, HostNamespace: hostNS,
@@ -239,6 +239,11 @@ func TestLifecycle(t *testing.T) {
 	if code != http.StatusOK || !strings.Contains(script, "talos.experimental.wipe=system") ||
 		!strings.Contains(script, "talos.config="+strings.Replace(res.IPXEURL, "/i/", "/c/", 1)) {
 		t.Fatalf("iPXE %d:\n%s", code, script)
+	}
+
+	// Talos reboots after the wipe; the next boot must install, not wipe again.
+	if code, again := e.get(res.IPXEURL); code != http.StatusOK || strings.Contains(again, "talos.experimental.wipe") {
+		t.Fatalf("second iPXE %d:\n%s", code, again)
 	}
 
 	// Config is the bootstrap data plus host settings.
@@ -379,5 +384,25 @@ func TestOldTokenFormatIsReplaced(t *testing.T) {
 	e.reconcile()
 	if r := e.reservation(); len(r.IPXEURL) > provision.MaxIPXEURLLength || strings.Contains(r.IPXEURL, strings.Repeat("b", 64)) {
 		t.Fatalf("old token still used: %s", r.IPXEURL)
+	}
+}
+
+func TestBootTimeoutCountsFromLastIPXEFetch(t *testing.T) {
+	e := newEnv(t, fixtures()...)
+	e.reconcile()
+	e.reconcile() // boot requested at t0
+	e.now = e.now.Add(10 * time.Minute)
+	if code, _ := e.get(e.reservation().IPXEURL); code != http.StatusOK { // host is booting at t0+10m
+		t.Fatalf("iPXE status %d", code)
+	}
+	e.now = e.now.Add(10 * time.Minute) // t0+20m: past the timeout from the request, not from the fetch
+	e.reconcile()
+	if a := e.host().Status.Provisioning.BootAttempts; a != 1 {
+		t.Fatalf("host was reset while booting: attempts=%d", a)
+	}
+	e.now = e.now.Add(6 * time.Minute)
+	e.reconcile()
+	if a := e.host().Status.Provisioning.BootAttempts; a != 2 {
+		t.Fatalf("no retry after a silent timeout: attempts=%d", a)
 	}
 }

@@ -36,7 +36,11 @@ type Server struct {
 	KernelURL  string
 	InitrdURL  string
 	KernelArgs []string
-	Now        func() time.Time
+	// WipeArgs are added on the first boot of a provisioning only, for
+	// example talos.experimental.wipe=system. Talos reboots after the wipe
+	// and the next boot installs.
+	WipeArgs []string
+	Now      func() time.Time
 }
 
 var ipxeTemplate = template.Must(template.New("ipxe").Parse(`#!ipxe
@@ -83,6 +87,20 @@ func (s *Server) serveIPXE(w http.ResponseWriter, r *http.Request) {
 	}
 	args := append([]string{}, s.KernelArgs...)
 	args = append(args, h.Spec.ExtraKernelArgs...)
+	firstBoot := h.Status.Provisioning.IPXEServedAt == nil
+	if firstBoot {
+		args = append(args, s.WipeArgs...)
+	}
+	if err := s.updateStatus(r.Context(), h, func(p *infrav1.ProvisioningStatus, now metav1.Time) {
+		if p.IPXEServedAt == nil {
+			p.IPXEServedAt = &now
+		}
+		p.LastIPXEServedAt = &now
+	}); err != nil {
+		logger.Error(err, "recording iPXE fetch")
+		http.Error(w, "try again", http.StatusServiceUnavailable)
+		return
+	}
 	args = append(args, "talos.config="+s.URLs.Config(h, r.PathValue("token")))
 	w.Header().Set("Content-Type", "text/plain")
 	if err := ipxeTemplate.Execute(w, map[string]string{
@@ -91,7 +109,7 @@ func (s *Server) serveIPXE(w http.ResponseWriter, r *http.Request) {
 		logger.Error(err, "writing iPXE script")
 		return
 	}
-	logger.Info("served iPXE script")
+	logger.Info("served iPXE script", "wipe", firstBoot && len(s.WipeArgs) > 0)
 }
 
 func (s *Server) serveConfig(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +127,7 @@ func (s *Server) serveConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "config not available", http.StatusServiceUnavailable)
 		return
 	}
-	if err := s.markServed(ctx, h); err != nil {
+	if err := s.updateStatus(ctx, h, func(p *infrav1.ProvisioningStatus, now metav1.Time) { p.ConfigServedAt = &now }); err != nil {
 		logger.Error(err, "recording config fetch")
 		http.Error(w, "try again", http.StatusServiceUnavailable)
 		return
@@ -160,14 +178,14 @@ func (s *Server) renderConfig(ctx context.Context, h *infrav1.BootBoxHost) ([]by
 	return talosconfig.Apply(data, provision.Settings(h, res))
 }
 
-func (s *Server) markServed(ctx context.Context, h *infrav1.BootBoxHost) error {
+func (s *Server) updateStatus(ctx context.Context, h *infrav1.BootBoxHost, mutate func(*infrav1.ProvisioningStatus, metav1.Time)) error {
 	now := metav1.NewTime(s.now())
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		cur := &infrav1.BootBoxHost{}
 		if err := s.Client.Get(ctx, client.ObjectKeyFromObject(h), cur); err != nil {
 			return err
 		}
-		cur.Status.Provisioning.ConfigServedAt = &now
+		mutate(&cur.Status.Provisioning, now)
 		return s.Client.Status().Update(ctx, cur)
 	})
 }
