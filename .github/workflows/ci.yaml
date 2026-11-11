@@ -28,6 +28,10 @@ jobs:
       - uses: azure/setup-helm@v4
       - name: Render kubernetes-nodes with the bootbox substrate
         run: helm template kubernetes-nodes-training-gpu packages/apps/kubernetes-nodes --namespace tenant-training --values packages/apps/kubernetes-nodes/tests/values-bootbox.yaml > /dev/null
+      - name: Render kubernetes-nodes bootbox with the API's kubelet defaults
+        run: |
+          printf 'kubelet:\n  evictionHardMemory: "7%%"\n  evictionSoftMemory: "10%%"\n' > /tmp/kubelet.yaml
+          helm template kubernetes-nodes-training-gpu packages/apps/kubernetes-nodes --namespace tenant-training --values packages/apps/kubernetes-nodes/tests/values-bootbox.yaml --values /tmp/kubelet.yaml > /dev/null
       - name: Render baremetal-server
         run: helm template baremetal-server-xa06 packages/apps/baremetal-server --namespace tenant-root --values packages/apps/baremetal-server/tests/values-xa06.yaml > /dev/null
       - name: ApplicationDefinitions are up to date
