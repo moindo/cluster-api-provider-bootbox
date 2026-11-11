@@ -1,0 +1,10 @@
+# Generic install. Hosts and Hardware live in the manager's namespace
+# (--host-namespace defaults to it); site overlays add the BMC network
+# attachment and the boot URLs.
+namespace: capi-bootbox-system
+namePrefix: capi-bootbox-
+resources:
+  - namespace.yaml
+  - ../crd
+  - ../rbac
+  - ../manager

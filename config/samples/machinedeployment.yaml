@@ -1,0 +1,42 @@
+# Worker pool of bare-metal hosts with label chassis=xa. The
+# TalosConfigTemplate carries the chassis-wide config (install image, bond,
+# kernel modules); host-specific values come from BootBoxHost.configPatches.
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: BootBoxMachineTemplate
+metadata:
+  name: kubernetes-training-bm-xa
+  namespace: tenant-training
+spec:
+  template:
+    spec:
+      hostSelector:
+        matchLabels:
+          chassis: xa
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  name: kubernetes-training-bm-xa
+  namespace: tenant-training
+spec:
+  clusterName: kubernetes-training
+  replicas: 1
+  selector:
+    matchLabels:
+      pool: bm-xa
+  template:
+    metadata:
+      labels:
+        pool: bm-xa
+    spec:
+      clusterName: kubernetes-training
+      version: v1.35.6
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          kind: TalosConfigTemplate
+          name: kubernetes-training-bm-xa
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+        kind: BootBoxMachineTemplate
+        name: kubernetes-training-bm-xa

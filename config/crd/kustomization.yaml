@@ -1,0 +1,9 @@
+resources:
+  - bases/infrastructure.cluster.x-k8s.io_bootboxhosts.yaml
+  - bases/infrastructure.cluster.x-k8s.io_bootboxmachines.yaml
+  - bases/infrastructure.cluster.x-k8s.io_bootboxmachinetemplates.yaml
+# Cluster API contract label: CAPI resolves the served version of the
+# infrastructure references from it.
+labels:
+  - pairs:
+      cluster.x-k8s.io/v1beta1: v1alpha1
