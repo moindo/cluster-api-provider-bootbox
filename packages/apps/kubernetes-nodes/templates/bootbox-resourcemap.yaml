@@ -1,0 +1,42 @@
+{{- /* bootbox: the console shows the ConfigMaps listed in an application's
+       "<release>-resourcemap". The BootBox provider writes one entry per
+       machine of this pool (host, node, address, provisioning phase) into
+       "<cluster>-<pool>-bootbox". */}}
+{{- if eq (.Values.substrate | default "kubevirt") "bootbox" }}
+{{- $clusterName := include "kubernetes-nodes.clusterName" . }}
+{{- $groupName := include "kubernetes-nodes.groupName" . }}
+{{- $status := printf "%s-%s-bootbox" $clusterName $groupName }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-resourcemap
+  namespace: {{ .Release.Namespace }}
+data:
+  resources: |
+    - apiVersion: v1
+      kind: ConfigMap
+      name: {{ $status }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-bootbox-status
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [{{ .Release.Name }}-resourcemap, {{ $status }}]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-bootbox-status
+  namespace: {{ .Release.Namespace }}
+subjects:
+{{ include "cozy-lib.rbac.subjectsForTenantAndAccessLevel" (list "use" .Release.Namespace) }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-bootbox-status
+{{- end }}

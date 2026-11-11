@@ -1,0 +1,113 @@
+{{- if ne .Release.Name .Chart.Name }}
+{{- fail (printf "The name of the release MUST BE %s" .Chart.Name) }}
+{{- end }}
+{{- if ne .Release.Namespace "tenant-root" }}
+{{- fail "The namespace of the release MUST BE tenant-root: servers are platform inventory" }}
+{{- end }}
+{{- $d := .Values.defaults }}
+{{- $seen := dict }}
+{{- range $i, $s := .Values.servers }}
+{{- if not (regexMatch `^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$` ($s.name | default "")) }}
+{{- fail (printf "servers[%d].name %q must be a DNS label (it becomes the hostname)" $i $s.name) }}
+{{- end }}
+{{- if hasKey $seen $s.name }}
+{{- fail (printf "servers[%d].name %q is listed twice" $i $s.name) }}
+{{- end }}
+{{- $_ := set $seen $s.name true }}
+{{- if not (regexMatch `^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$` ($s.mac | default "")) }}
+{{- fail (printf "servers[%d] (%s): mac %q is not a MAC address" $i $s.name $s.mac) }}
+{{- end }}
+{{- if not $s.ip }}
+{{- fail (printf "servers[%d] (%s): ip is required, smee only answers reserved addresses" $i $s.name) }}
+{{- end }}
+{{- if not (regexMatch `^https?://` (dig "bmc" "address" "" $s)) }}
+{{- fail (printf "servers[%d] (%s): bmc.address must be a Redfish URL" $i $s.name) }}
+{{- end }}
+{{- $netmask := $s.netmask | default $d.netmask }}
+{{- $gateway := $s.gateway | default $d.gateway }}
+---
+apiVersion: tinkerbell.org/v1alpha1
+kind: Hardware
+metadata:
+  name: {{ $s.name }}
+  namespace: {{ include "baremetal.hostNamespace" $ }}
+  labels:
+    {{- include "baremetal.appLabels" $ | nindent 4 }}
+  annotations:
+    # netboot is owned by the BootBox provider while the server provisions;
+    # Helm only sets it when the chart values change.
+    infrastructure.cluster.x-k8s.io/netboot-owner: cluster-api-provider-bootbox
+spec:
+  interfaces:
+    - dhcp:
+        hostname: {{ $s.name }}
+        mac: {{ lower $s.mac | replace "-" ":" }}
+        arch: {{ $s.arch | default "x86_64" }}
+        uefi: true
+        lease_time: 86400
+        ip:
+          address: {{ $s.ip }}
+          {{- with $netmask }}
+          netmask: {{ . }}
+          {{- end }}
+          {{- with $gateway }}
+          gateway: {{ . }}
+          {{- end }}
+        {{- with ($s.nameServers | default $d.nameServers) }}
+        name_servers:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with ($s.timeServers | default $d.timeServers) }}
+        time_servers:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      netboot:
+        allowPXE: false
+        {{- with ($s.idleIPXEURL | default $d.idleIPXEURL) }}
+        ipxe:
+          url: {{ . }}
+        {{- end }}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha1
+kind: BootBoxHost
+metadata:
+  name: {{ $s.name }}
+  namespace: {{ include "baremetal.hostNamespace" $ }}
+  labels:
+    {{- include "baremetal.appLabels" $ | nindent 4 }}
+    {{- with $s.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    bootbox.infrastructure.cluster.x-k8s.io/status-configmap: {{ $.Release.Namespace }}/{{ include "baremetal.statusConfigMap" $ }}
+spec:
+  hardwareName: {{ $s.name }}
+  maintenance: {{ ternary $s.maintenance true (hasKey $s "maintenance") }}
+  consumerNamespaces:
+    {{- toYaml ($s.consumerNamespaces | default list) | nindent 4 }}
+  bmc:
+    address: {{ $s.bmc.address }}
+    credentialsName: {{ $s.bmc.credentialsSecret | default (printf "%s-bmc" $s.name) }}
+    {{- with $s.bmc.certificateFingerprint }}
+    certificateFingerprint: {{ . }}
+    {{- end }}
+    {{- if $s.bmc.insecureSkipVerify }}
+    insecureSkipVerify: true
+    {{- end }}
+    {{- with $s.bmc.systemID }}
+    systemID: {{ . }}
+    {{- end }}
+  {{- $patches := list }}
+  {{- with (dig "staticAddress" "address" "" $s) }}
+  {{- $patches = append $patches (dict "kind" (dig "staticAddress" "kind" "BondConfig" $s | default "BondConfig") "name" (dig "staticAddress" "link" "bond1" $s | default "bond1") "patch" (dict "addresses" (list (dict "address" .)))) }}
+  {{- end }}
+  {{- $patches = concat $patches ($s.configPatches | default list) }}
+  {{- with $patches }}
+  configPatches:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $s.extraKernelArgs }}
+  extraKernelArgs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

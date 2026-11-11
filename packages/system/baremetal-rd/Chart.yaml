@@ -1,0 +1,4 @@
+apiVersion: v2
+name: baremetal-rd
+description: ApplicationDefinition for the BareMetal module
+version: 0.1.0

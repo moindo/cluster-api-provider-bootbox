@@ -1,0 +1,183 @@
+{
+  "title": "Chart Values",
+  "type": "object",
+  "properties": {
+    "defaults": {
+      "description": "Network settings shared by all servers.",
+      "type": "object",
+      "default": {},
+      "properties": {
+        "netmask": {
+          "description": "Netmask of the reservations, e.g. 255.255.248.0.",
+          "type": "string",
+          "default": ""
+        },
+        "gateway": {
+          "description": "Default gateway of the reservations.",
+          "type": "string",
+          "default": ""
+        },
+        "nameServers": {
+          "description": "Resolvers handed out by DHCP.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeServers": {
+          "description": "NTP servers handed out by DHCP.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "idleIPXEURL": {
+          "description": "iPXE script URL while a server is not provisioning (BootBox matchbox script).",
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "servers": {
+      "description": "Registered servers. BMC credentials live in hand-made Secrets cozy-bootbox/<name>-bmc.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "mac",
+          "ip",
+          "bmc"
+        ],
+        "properties": {
+          "name": {
+            "description": "Server and node hostname (DNS label).",
+            "type": "string"
+          },
+          "mac": {
+            "description": "MAC address of the PXE network interface.",
+            "type": "string"
+          },
+          "ip": {
+            "description": "Reserved IPv4 address.",
+            "type": "string"
+          },
+          "bmc": {
+            "description": "Redfish endpoint.",
+            "type": "object",
+            "required": [
+              "address"
+            ],
+            "properties": {
+              "address": {
+                "description": "Redfish base URL, e.g. https://10.0.0.10.",
+                "type": "string"
+              },
+              "credentialsSecret": {
+                "description": "Secret in cozy-bootbox with keys username and password; defaults to <name>-bmc. Create it by hand.",
+                "type": "string"
+              },
+              "certificateFingerprint": {
+                "description": "SHA-256 fingerprint of the BMC certificate (pinning).",
+                "type": "string"
+              },
+              "insecureSkipVerify": {
+                "description": "Skip TLS verification when no fingerprint is set.",
+                "type": "boolean"
+              },
+              "systemID": {
+                "description": "Redfish ComputerSystem, e.g. System.Embedded.1.",
+                "type": "string"
+              }
+            }
+          },
+          "labels": {
+            "description": "Labels on the BootBoxHost; bootbox pools select hosts by them.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "consumerNamespaces": {
+            "description": "Tenant namespaces whose pools may claim this server.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maintenance": {
+            "description": "Keep the server from being claimed (default true).",
+            "type": "boolean"
+          },
+          "staticAddress": {
+            "description": "Static node address; empty keeps DHCP.",
+            "type": "object",
+            "properties": {
+              "address": {
+                "description": "CIDR, e.g. 172.19.24.36/21.",
+                "type": "string"
+              },
+              "link": {
+                "description": "Document name, default bond1.",
+                "type": "string"
+              },
+              "kind": {
+                "description": "Document kind, default BondConfig.",
+                "type": "string"
+              }
+            }
+          },
+          "configPatches": {
+            "description": "Further host-specific JSON merge patches for the machine config.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "patch"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "patch": {
+                  "type": "object",
+                  "x-kubernetes-preserve-unknown-fields": true
+                }
+              }
+            }
+          },
+          "extraKernelArgs": {
+            "description": "Kernel arguments added to the provisioning boot.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "arch": {
+            "description": "CPU architecture.",
+            "type": "string",
+            "enum": [
+              "x86_64",
+              "aarch64"
+            ]
+          },
+          "netmask": {
+            "description": "Overrides defaults.netmask.",
+            "type": "string"
+          },
+          "gateway": {
+            "description": "Overrides defaults.gateway.",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

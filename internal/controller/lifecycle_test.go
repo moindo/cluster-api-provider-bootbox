@@ -406,3 +406,44 @@ func TestBootTimeoutCountsFromLastIPXEFetch(t *testing.T) {
 		t.Fatalf("no retry after a silent timeout: attempts=%d", a)
 	}
 }
+
+func TestStatusConfigMaps(t *testing.T) {
+	objs := fixtures()
+	for _, o := range objs {
+		switch v := o.(type) {
+		case *infrav1.BootBoxHost:
+			v.Annotations = map[string]string{"bootbox.infrastructure.cluster.x-k8s.io/status-configmap": "tenant-root/baremetal-status"}
+		case *infrav1.BootBoxMachine:
+			v.Labels[clusterv1.MachineDeploymentNameLabel] = "kubernetes-training-gpu"
+		}
+	}
+	e := newEnv(t, objs...)
+	hr := &HostReconciler{Client: e.c, BMC: func(redfish.Config) (redfish.BMC, error) { return e.bmc, nil }, InspectInterval: 10 * time.Minute}
+	if _, err := hr.Reconcile(context.Background(), ctrl.Request{NamespacedName: client.ObjectKey{Namespace: hostNS, Name: "xa06"}}); err != nil {
+		t.Fatal(err)
+	}
+	get := func(ns, name string) map[string]string {
+		cm := &corev1.ConfigMap{}
+		if err := e.c.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: name}, cm); err != nil {
+			t.Fatalf("configmap %s/%s: %v", ns, name, err)
+		}
+		return cm.Data
+	}
+	if d := get("tenant-root", "baremetal-status")["xa06"]; !strings.Contains(d, "model: PowerEdge R750xa") || !strings.Contains(d, "bmc: reachable") {
+		t.Fatalf("host summary:\n%s", d)
+	}
+
+	e.reconcile()
+	e.reconcile()
+	if d := get(tenantNS, "kubernetes-training-gpu-bootbox")["bm-xa-0"]; !strings.Contains(d, "host: xa06") || !strings.Contains(d, "phase: WaitingForConfigFetch") {
+		t.Fatalf("machine summary:\n%s", d)
+	}
+
+	if err := e.c.Delete(context.Background(), e.bbm()); err != nil {
+		t.Fatal(err)
+	}
+	e.reconcile()
+	if _, ok := get(tenantNS, "kubernetes-training-gpu-bootbox")["bm-xa-0"]; ok {
+		t.Fatal("machine entry not removed after deletion")
+	}
+}

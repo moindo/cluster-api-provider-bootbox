@@ -16,6 +16,7 @@ import (
 
 	infrav1 "github.com/moindo/cluster-api-provider-bootbox/api/v1alpha1"
 	"github.com/moindo/cluster-api-provider-bootbox/internal/redfish"
+	"github.com/moindo/cluster-api-provider-bootbox/internal/statuscm"
 )
 
 // HostReconciler keeps the inventory data of BootBoxHosts current.
@@ -30,6 +31,7 @@ type HostReconciler struct {
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=bootboxhosts/status;bootboxhosts/finalizers,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;create;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;create;update
 
 // Reconcile inspects the host through its BMC.
 func (r *HostReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -43,6 +45,9 @@ func (r *HostReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		if host.Status.ConsumerRef != nil {
 			logger.Info("host is claimed, delaying deletion", "consumer", host.Status.ConsumerRef.Name)
 			return ctrl.Result{RequeueAfter: time.Minute}, nil
+		}
+		if err := r.unpublish(ctx, host); err != nil {
+			return ctrl.Result{}, err
 		}
 		if controllerutil.RemoveFinalizer(host, infrav1.HostFinalizer) {
 			return ctrl.Result{}, r.Client.Update(ctx, host)
@@ -69,6 +74,9 @@ func (r *HostReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	if err := r.Client.Status().Patch(ctx, host, client.MergeFrom(base)); err != nil {
 		return ctrl.Result{}, err
+	}
+	if err := r.publish(ctx, host); err != nil {
+		log.FromContext(ctx).Info("publishing status failed", "error", err.Error())
 	}
 	return ctrl.Result{RequeueAfter: r.InspectInterval}, nil
 }
@@ -134,4 +142,62 @@ func bmcFor(ctx context.Context, c client.Reader, f redfish.Factory, host *infra
 // SetupWithManager registers the reconciler.
 func (r *HostReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).For(&infrav1.BootBoxHost{}).Named("bootboxhost").Complete(r)
+}
+
+// HostSummary is what a host publishes into its status ConfigMap.
+type HostSummary struct {
+	State       string `json:"state"`
+	Maintenance bool   `json:"maintenance,omitempty"`
+	Power       string `json:"power,omitempty"`
+	BMC         string `json:"bmc"`
+	Model       string `json:"model,omitempty"`
+	Serial      string `json:"serial,omitempty"`
+	BIOS        string `json:"bios,omitempty"`
+	Consumer    string `json:"consumer,omitempty"`
+	Tenants     string `json:"tenants,omitempty"`
+	Inspected   string `json:"inspected,omitempty"`
+}
+
+func summarizeHost(h *infrav1.BootBoxHost) HostSummary {
+	s := HostSummary{
+		State:       string(h.Status.State),
+		Maintenance: h.Spec.Maintenance,
+		Power:       h.Status.Hardware.PowerState,
+		Model:       h.Status.Hardware.Model,
+		Serial:      h.Status.Hardware.SerialNumber,
+		BIOS:        h.Status.Hardware.BIOSVersion,
+		BMC:         "unknown",
+	}
+	if c := meta.FindStatusCondition(h.Status.Conditions, infrav1.ConditionBMCReachable); c != nil {
+		s.BMC = "reachable"
+		if c.Status != metav1.ConditionTrue {
+			s.BMC = "unreachable: " + c.Message
+		}
+	}
+	if ref := h.Status.ConsumerRef; ref != nil {
+		s.Consumer = ref.Namespace + "/" + ref.Name
+	}
+	if len(h.Spec.ConsumerNamespaces) > 0 {
+		s.Tenants = fmt.Sprint(h.Spec.ConsumerNamespaces)
+	}
+	if h.Status.LastInspected != nil {
+		s.Inspected = h.Status.LastInspected.UTC().Format(time.RFC3339)
+	}
+	return s
+}
+
+func (r *HostReconciler) publish(ctx context.Context, h *infrav1.BootBoxHost) error {
+	key, ok, err := statuscm.Target(h)
+	if !ok || err != nil {
+		return err
+	}
+	return statuscm.Set(ctx, r.Client, key, h.Name, summarizeHost(h))
+}
+
+func (r *HostReconciler) unpublish(ctx context.Context, h *infrav1.BootBoxHost) error {
+	key, ok, err := statuscm.Target(h)
+	if !ok || err != nil {
+		return nil //nolint:nilerr // a broken annotation must not block deletion
+	}
+	return statuscm.Remove(ctx, r.Client, key, h.Name)
 }

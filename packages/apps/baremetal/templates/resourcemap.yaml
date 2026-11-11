@@ -1,0 +1,14 @@
+{{- /* The console shows the ConfigMaps listed here in the module's ConfigMaps
+       tab; the BootBox provider keeps one entry per server in it. */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-resourcemap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "baremetal.appLabels" . | nindent 4 }}
+data:
+  resources: |
+    - apiVersion: v1
+      kind: ConfigMap
+      name: {{ include "baremetal.statusConfigMap" . }}

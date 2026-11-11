@@ -1,0 +1,20 @@
+defaults:
+  netmask: 255.255.248.0
+  gateway: 172.19.24.1
+  nameServers: [10.249.13.1, 10.249.13.23]
+  timeServers: [time.uk-essen.de]
+  idleIPXEURL: http://pxe.infra.kite.ume.de/boot.ipxe
+servers:
+  - name: xa06
+    mac: 40:a6:b7:96:ac:98
+    ip: 172.19.24.36
+    bmc:
+      address: https://10.99.121.22
+      certificateFingerprint: E9:82:F9:2A:D5:08:5A:3A:84:83:F9:DF:BA:96:DF:97:FB:22:5A:E5:E5:45:C5:31:48:1B:48:91:40:08:76:10
+      systemID: System.Embedded.1
+    labels:
+      cozykite.ume.de/chassis: xa
+    consumerNamespaces: [tenant-training]
+    maintenance: false
+    staticAddress:
+      address: 172.19.24.36/21

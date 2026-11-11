@@ -31,6 +31,7 @@ import (
 	"github.com/moindo/cluster-api-provider-bootbox/internal/hardware"
 	"github.com/moindo/cluster-api-provider-bootbox/internal/provision"
 	"github.com/moindo/cluster-api-provider-bootbox/internal/redfish"
+	"github.com/moindo/cluster-api-provider-bootbox/internal/statuscm"
 )
 
 // MachineReconciler claims a BootBoxHost for each BootBoxMachine, PXE-boots
@@ -89,8 +90,12 @@ func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 	defer func() {
 		if err := helper.Patch(ctx, bbm, patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
 			infrav1.HostProvisionedCondition,
-		}}); err != nil {
+		}}); err != nil && !apierrors.IsNotFound(err) {
+			// NotFound: the finalizer was just removed and the object is gone.
 			reterr = errors.Join(reterr, err)
+		}
+		if err := r.publish(ctx, machine, bbm); err != nil {
+			logger.Info("publishing status failed", "error", err.Error())
 		}
 	}()
 
@@ -392,4 +397,57 @@ func hostToMachine(_ context.Context, o client.Object) []reconcile.Request {
 		return nil
 	}
 	return []reconcile.Request{{NamespacedName: client.ObjectKey{Namespace: h.Status.ConsumerRef.Namespace, Name: h.Status.ConsumerRef.Name}}}
+}
+
+// MachineSummary is what a machine publishes into its status ConfigMap.
+type MachineSummary struct {
+	Host       string `json:"host,omitempty"`
+	Node       string `json:"node,omitempty"`
+	Address    string `json:"address,omitempty"`
+	Ready      bool   `json:"ready"`
+	Phase      string `json:"phase,omitempty"`
+	Message    string `json:"message,omitempty"`
+	ProviderID string `json:"providerID,omitempty"`
+}
+
+// publish reports the machine into the ConfigMap named by its status
+// annotation, or "<deployment>-bootbox" for machines of a MachineDeployment,
+// and removes the entry once the machine is deleted.
+func (r *MachineReconciler) publish(ctx context.Context, machine *clusterv1.Machine, bbm *infrav1.BootBoxMachine) error {
+	key, ok, err := statuscm.Target(bbm)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// Default: one ConfigMap per MachineDeployment, "<deployment>-bootbox".
+		// Not set through the template so that enabling it never rolls a pool.
+		dep := bbm.Labels[clusterv1.MachineDeploymentNameLabel]
+		if dep == "" {
+			return nil
+		}
+		key = client.ObjectKey{Namespace: bbm.Namespace, Name: dep + "-bootbox"}
+	}
+	if !bbm.DeletionTimestamp.IsZero() {
+		return statuscm.Remove(ctx, r.Client, key, bbm.Name)
+	}
+	s := MachineSummary{Ready: bbm.Status.Ready, ProviderID: ptr.Deref(bbm.Spec.ProviderID, ""), Phase: "Pending"}
+	if bbm.Status.HostRef != nil {
+		s.Host = bbm.Status.HostRef.Name
+	}
+	for _, a := range bbm.Status.Addresses {
+		if a.Type == clusterv1.MachineInternalIP {
+			s.Address = a.Address
+		}
+	}
+	if machine != nil && machine.Status.NodeRef != nil {
+		s.Node = machine.Status.NodeRef.Name
+	}
+	if c := conditions.Get(bbm, infrav1.HostProvisionedCondition); c != nil {
+		if c.Status == corev1.ConditionTrue {
+			s.Phase = "Provisioned"
+		} else {
+			s.Phase, s.Message = c.Reason, c.Message
+		}
+	}
+	return statuscm.Set(ctx, r.Client, key, bbm.Name, s)
 }

@@ -1,4 +1,0 @@
-apiVersion: v2
-name: baremetal-server-rd
-description: ApplicationDefinition for BareMetalServer (bare-metal server inventory)
-version: 0.1.0
