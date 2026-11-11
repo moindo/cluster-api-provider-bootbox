@@ -1,70 +1,81 @@
 #!/usr/bin/env python3
-"""Generate the BareMetalNodes ApplicationDefinition from the app chart.
+"""Generate an ApplicationDefinition from an app chart in packages/apps.
 
 The dashboard form is built from openAPISchema, so the KubeVirt/Proxmox-only
 inputs the forked chart still carries are left out; their chart defaults
 apply. Usage: gen-cozyrd.py <app chart dir> <output file>
+The app is chosen by the chart directory name (APPS below).
 """
 import base64, json, sys, pathlib
 
 chart, out = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 schema = json.loads((chart / "values.schema.json").read_text())
-hidden = {"storageClass", "instanceType", "diskSize", "resources", "gpus",
-          "logSerialConsole", "podCpuLimit", "podCpuRequest", "osImage",
-          "substrate", "proxmox"}
-schema["properties"] = {k: v for k, v in schema["properties"].items() if k not in hidden}
-order = ["cluster", "minReplicas", "maxReplicas", "roles", "bootbox", "kernelModules",
-         "kubelet", "talos", "version", "maxUnhealthy", "nodeStartupTimeout",
-         "readyUnknownTimeout", "readyFalseTimeout", "maxNodeProvisionTime"]
-keys = [["apiVersion"], ["appVersion"], ["kind"], ["metadata"], ["metadata", "name"]]
-for k in order + sorted(set(schema["properties"]) - set(order)):
-    if k in schema["properties"]:
-        keys.append(["spec", k])
-        for sub in schema["properties"][k].get("properties", {}):
-            keys.append(["spec", k, sub])
 icon = base64.b64encode((chart / "logos" / "baremetal.svg").read_bytes()).decode()
 
-doc = {
-    "apiVersion": "cozystack.io/v1alpha1",
-    "kind": "ApplicationDefinition",
-    "metadata": {
-        "name": "baremetal-nodes",
-        "annotations": {
+APPS = {
+    "baremetal-nodes": dict(
+        kind="BareMetalNodes", singular="baremetalnodes", plural="baremetalnodeses",
+        prefix="baremetal-nodes-", category="IaaS", title="Bare Metal Nodes", weight=42,
+        tags=["compute", "bare-metal"],
+        description="Bare-metal worker pool for a managed Kubernetes cluster",
+        hidden={"storageClass", "instanceType", "diskSize", "resources", "gpus",
+                "logSerialConsole", "podCpuLimit", "podCpuRequest", "osImage",
+                "substrate", "proxmox"},
+        order=["cluster", "minReplicas", "maxReplicas", "roles", "bootbox", "kernelModules",
+               "kubelet", "talos", "version", "maxUnhealthy", "nodeStartupTimeout",
+               "readyUnknownTimeout", "readyFalseTimeout", "maxNodeProvisionTime"],
+        annotations={
             # Same as kubernetes-nodes: the release settles while the
             # talos-reconcile Job waits for the parent control plane.
             "release.cozystack.io/helm-install-timeout": "15m",
             "release.cozystack.io/helm-install-disable-wait": "true",
-        },
-    },
+        }),
+    "baremetal-server": dict(
+        kind="BareMetalServer", singular="baremetalserver", plural="baremetalservers",
+        prefix="baremetal-server-", category="Administration", title="Bare Metal Servers",
+        weight=60, tags=["bare-metal"],
+        description="Bare-metal server for BootBox provisioning (DHCP reservation, BMC, pool labels)",
+        hidden=set(),
+        order=["mac", "ip", "nameServers", "timeServers", "bmc", "labels", "consumerNamespaces",
+               "maintenance", "staticAddress", "configPatches", "extraKernelArgs", "arch", "idleIPXEURL"],
+        annotations={}),
+}
+app = APPS[chart.name]
+schema["properties"] = {k: v for k, v in schema["properties"].items() if k not in app["hidden"]}
+keys = [["apiVersion"], ["appVersion"], ["kind"], ["metadata"], ["metadata", "name"]]
+for k in app["order"] + sorted(set(schema["properties"]) - set(app["order"])):
+    if k in schema["properties"]:
+        keys.append(["spec", k])
+        for sub in schema["properties"][k].get("properties", {}):
+            keys.append(["spec", k, sub])
+
+doc = {
+    "apiVersion": "cozystack.io/v1alpha1",
+    "kind": "ApplicationDefinition",
+    "metadata": {"name": chart.name, "annotations": app["annotations"]},
     "spec": {
         "application": {
-            "kind": "BareMetalNodes",
-            "singular": "baremetalnodes",
-            "plural": "baremetalnodeses",
+            "kind": app["kind"], "singular": app["singular"], "plural": app["plural"],
             "openAPISchema": json.dumps(schema, separators=(",", ":")),
         },
         "release": {
             "labels": {"sharding.fluxcd.io/key": "tenants"},
-            "prefix": "baremetal-nodes-",
+            "prefix": app["prefix"],
             "chartRef": {
                 "kind": "ExternalArtifact",
-                "name": "moindo-baremetal-nodes-application-default-baremetal-nodes",
+                # <PackageSource name, dots as dashes>-<variant>-<component>
+                "name": f"moindo-{chart.name}-application-default-{chart.name}",
                 "namespace": "cozy-system",
             },
         },
         "dashboard": {
-            "category": "IaaS",
-            "singular": "Bare Metal Nodes",
-            "plural": "Bare Metal Nodes",
-            "weight": 42,
-            "tags": ["compute", "bare-metal"],
-            "description": "Bare-metal worker pool for a managed Kubernetes cluster",
-            "icon": icon,
-            "keysOrder": keys,
+            "category": app["category"], "singular": app["title"], "plural": app["title"],
+            "weight": app["weight"], "tags": app["tags"], "description": app["description"],
+            "icon": icon, "keysOrder": keys,
         },
         "secrets": {"exclude": [], "include": []},
         "services": {"exclude": [], "include": []},
     },
 }
-out.write_text("# Generated by hack/gen-cozyrd.py from packages/apps/baremetal-nodes; do not edit.\n"
+out.write_text(f"# Generated by hack/gen-cozyrd.py from packages/apps/{chart.name}; do not edit.\n"
                + json.dumps(doc, indent=2) + "\n")

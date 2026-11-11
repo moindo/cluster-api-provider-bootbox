@@ -8,9 +8,13 @@ repository:
 |---|---|
 | `apps/baremetal-nodes` | Chart of the `BareMetalNodes` app: a worker pool on bare-metal servers. Fork of cozystack v1.7.0 `apps/kubernetes-nodes` with an additional `bootbox` substrate (the default here); the diff to upstream is the proposed `substrate: bootbox` for `KubernetesNodes`. |
 | `system/baremetal-nodes-rd` | `ApplicationDefinition` of `BareMetalNodes` (dashboard category IaaS). Generated: `make -C system/baremetal-nodes-rd generate`. |
+| `apps/baremetal-server` | Chart of the `BareMetalServer` app (dashboard: Administration, tenant-root only): one physical server, rendering its Tinkerbell `Hardware` (DHCP reservation) and `BootBoxHost` (BMC, labels, admitted tenants, static address) in `cozy-bootbox`. BMC credentials stay in a hand-made Secret `<name>-bmc`. |
+| `system/baremetal-server-rd` | `ApplicationDefinition` of `BareMetalServer`. |
 | `library/cozy-lib` | Vendored cozystack v1.7.0 library chart. |
 
-Install (management cluster, namespace `cozy-system`):
+Install (management cluster, namespace `cozy-system`); `BareMetalServer` gets a
+second PackageSource/Package `moindo.baremetal-server-application` with the
+components `baremetal-server` and `baremetal-server-rd`:
 
 ```yaml
 apiVersion: source.toolkit.fluxcd.io/v1

@@ -1,0 +1,176 @@
+{
+  "title": "Chart Values",
+  "type": "object",
+  "properties": {
+    "mac": {
+      "description": "MAC address of the PXE network interface.",
+      "type": "string",
+      "default": ""
+    },
+    "ip": {
+      "description": "DHCP reservation.",
+      "type": "object",
+      "default": {},
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "description": "IPv4 address.",
+          "type": "string",
+          "default": ""
+        },
+        "netmask": {
+          "description": "Netmask, e.g. 255.255.248.0.",
+          "type": "string",
+          "default": ""
+        },
+        "gateway": {
+          "description": "Default gateway.",
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "nameServers": {
+      "description": "Resolvers handed out by DHCP.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "timeServers": {
+      "description": "NTP servers handed out by DHCP.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "arch": {
+      "description": "CPU architecture.",
+      "type": "string",
+      "default": "x86_64",
+      "enum": [
+        "x86_64",
+        "aarch64"
+      ]
+    },
+    "idleIPXEURL": {
+      "description": "iPXE script URL while the server is not provisioning (BootBox matchbox script).",
+      "type": "string",
+      "default": ""
+    },
+    "bmc": {
+      "description": "Redfish endpoint of the server.",
+      "type": "object",
+      "default": {},
+      "required": [
+        "address"
+      ],
+      "properties": {
+        "address": {
+          "description": "Redfish base URL, e.g. https://10.0.0.10.",
+          "type": "string",
+          "default": ""
+        },
+        "credentialsSecret": {
+          "description": "Secret in cozy-bootbox with keys username and password. Defaults to <name>-bmc. Create it by hand; credentials never go into this spec.",
+          "type": "string",
+          "default": ""
+        },
+        "certificateFingerprint": {
+          "description": "SHA-256 fingerprint of the BMC certificate (pinning).",
+          "type": "string",
+          "default": ""
+        },
+        "insecureSkipVerify": {
+          "description": "Skip TLS verification when no fingerprint is set.",
+          "type": "boolean",
+          "default": false
+        },
+        "systemID": {
+          "description": "Redfish ComputerSystem, e.g. System.Embedded.1.",
+          "type": "string",
+          "default": ""
+        }
+      }
+    },
+    "labels": {
+      "description": "Labels on the BootBoxHost; BareMetalNodes pools select hosts by them.",
+      "type": "object",
+      "default": {},
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "consumerNamespaces": {
+      "description": "Tenant namespaces whose pools may claim this server, e.g. tenant-training.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "maintenance": {
+      "description": "Keep the server from being claimed. New servers start in maintenance.",
+      "type": "boolean",
+      "default": true
+    },
+    "staticAddress": {
+      "description": "Static node address in one link document of the machine config. Empty keeps DHCP.",
+      "type": "object",
+      "default": {},
+      "properties": {
+        "address": {
+          "description": "CIDR, e.g. 172.19.24.36/21.",
+          "type": "string",
+          "default": ""
+        },
+        "link": {
+          "description": "Document name.",
+          "type": "string",
+          "default": "bond1"
+        },
+        "kind": {
+          "description": "Document kind.",
+          "type": "string",
+          "default": "BondConfig"
+        }
+      }
+    },
+    "configPatches": {
+      "description": "Further host-specific JSON merge patches for the machine config.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "patch"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "patch": {
+            "type": "object",
+            "x-kubernetes-preserve-unknown-fields": true
+          }
+        }
+      }
+    },
+    "extraKernelArgs": {
+      "description": "Kernel arguments added to the provisioning boot.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
