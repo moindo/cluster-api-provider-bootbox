@@ -1,0 +1,6 @@
+apiVersion: v2
+name: baremetal-server
+description: Bare-metal server registered with BootBox (DHCP reservation and BootBoxHost)
+type: application
+version: 0.0.0 # set by the Cozystack package build
+appVersion: "0.1.0"

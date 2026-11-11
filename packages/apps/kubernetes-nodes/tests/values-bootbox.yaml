@@ -1,0 +1,36 @@
+substrate: bootbox
+instanceType: ""
+cluster: training
+minReplicas: 0
+maxReplicas: 1
+talos:
+  version: v1.14.2
+  schematicID: 4582a2ee2a9dfb3bfbe5e18ee646ddfd9dfd6b1cf0abf65473583a6087f0343d
+  installerRepository: factory.talos.dev/metal-installer
+kernelModules:
+  - name: nvidia
+  - name: nvidia_uvm
+  - name: nvidia_drm
+  - name: nvidia_modeset
+bootbox:
+  hostSelector:
+    cozykite.ume.de/chassis: xa
+  dnsServers: [10.249.13.1, 10.249.13.23]
+  apiServerAddress: 172.19.24.8
+  nodeSubnets: [172.19.24.0/21]
+  installDiskSelector:
+    model: MTFDDAV480TDS
+  sysctls:
+    net.core.bpf_jit_harden: "1"
+  extraDocuments: |
+    apiVersion: v1alpha1
+    kind: BondConfig
+    name: bond1
+    links: [ens3f0np0, ens3f1np1]
+    bondMode: 802.3ad
+    xmitHashPolicy: layer2+3
+    lacpRate: fast
+    miimon: 100
+    mtu: 9000
+    routes:
+      - gateway: 172.19.24.1
