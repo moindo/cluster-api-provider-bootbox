@@ -113,7 +113,7 @@ func main() {
 	}
 
 	boot := &bootserver.Server{
-		Client: mgr.GetClient(), URLs: urls,
+		Client: mgr.GetClient(), URLs: urls, HostNamespace: hostNamespace,
 		KernelURL: kernelURL, InitrdURL: initrdURL, KernelArgs: splitArgs(kernelArgs),
 	}
 	if err := mgr.Add(&httpRunnable{addr: bootAddr, handler: boot.Handler()}); err != nil {

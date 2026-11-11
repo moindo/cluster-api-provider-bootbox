@@ -28,6 +28,14 @@ const (
 
 	tokenKey = "token"
 
+	// tokenBytes is the token entropy (128 bit, 32 hex characters). The iPXE
+	// URL travels in the 128-byte DHCP boot file field, so it must stay short.
+	tokenBytes = 16
+
+	// MaxIPXEURLLength is the longest iPXE URL that fits the DHCP boot file
+	// field (128 bytes including the terminating NUL).
+	MaxIPXEURLLength = 127
+
 	// LabelHost marks token secrets with the name of their host.
 	LabelHost = "infrastructure.cluster.x-k8s.io/bootbox-host"
 )
@@ -66,13 +74,18 @@ func EnsureToken(ctx context.Context, c client.Client, h *infrav1.BootBoxHost) (
 	s := &corev1.Secret{}
 	key := client.ObjectKey{Namespace: h.Namespace, Name: TokenSecretName(h)}
 	err := c.Get(ctx, key, s)
-	if err == nil {
+	switch {
+	case err == nil && len(s.Data[tokenKey]) == 2*tokenBytes:
 		return string(s.Data[tokenKey]), nil
-	}
-	if !apierrors.IsNotFound(err) {
+	case err == nil:
+		// Token of an older format: replace it.
+		if err := c.Delete(ctx, s); client.IgnoreNotFound(err) != nil {
+			return "", err
+		}
+	case !apierrors.IsNotFound(err):
 		return "", err
 	}
-	b := make([]byte, 32)
+	b := make([]byte, tokenBytes)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
@@ -111,22 +124,29 @@ func CheckToken(ctx context.Context, r client.Reader, h *infrav1.BootBoxHost, pr
 	return nil
 }
 
-// BootURLs builds the per-host iPXE and config URLs below base.
+// BootURLs builds the per-host iPXE and config URLs below base:
+// <base>/i/<host>/<token> (iPXE script) and <base>/c/<host>/<token> (config).
+// Hosts live in one namespace, so it is not part of the path.
 type BootURLs struct{ Base *url.URL }
 
-func (b BootURLs) path(h *infrav1.BootBoxHost, token, file string) string {
+func (b BootURLs) path(kind string, h *infrav1.BootBoxHost, token string) string {
 	u := *b.Base
-	u.Path = strings.TrimSuffix(u.Path, "/") + "/boot/" + url.PathEscape(h.Namespace) + "/" +
-		url.PathEscape(h.Name) + "/" + token + "/" + file
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + kind + "/" + url.PathEscape(h.Name) + "/" + token
 	return u.String()
 }
 
-// IPXE is the URL smee hands to the host's iPXE.
-func (b BootURLs) IPXE(h *infrav1.BootBoxHost, token string) string {
-	return b.path(h, token, "boot.ipxe")
+// IPXE is the URL smee hands to the host's iPXE. It fails when the URL does
+// not fit the DHCP boot file field.
+func (b BootURLs) IPXE(h *infrav1.BootBoxHost, token string) (string, error) {
+	u := b.path("i", h, token)
+	if len(u) > MaxIPXEURLLength {
+		return "", fmt.Errorf("iPXE URL of host %s is %d bytes, the DHCP boot file field holds %d; shorten --boot-base-url or the host name",
+			h.Name, len(u), MaxIPXEURLLength)
+	}
+	return u, nil
 }
 
 // Config is the URL Talos fetches its machine config from.
 func (b BootURLs) Config(h *infrav1.BootBoxHost, token string) string {
-	return b.path(h, token, "config")
+	return b.path("c", h, token)
 }

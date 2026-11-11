@@ -1,4 +1,4 @@
-# cluster-api-provider-bootbox
+ Keep it short: the iPXE URL travels in the 128-byte DHCP boot file field (the provider refuses longer URLs).# cluster-api-provider-bootbox
 
 A [Cluster API](https://cluster-api.sigs.k8s.io/) infrastructure provider that
 turns bare-metal servers into Talos worker nodes. Servers are PXE-booted
@@ -26,14 +26,14 @@ BootBoxHost (inventory, cozy-bootbox)        BootBoxMachine (per Machine, tenant
    `BootBoxHost` whose labels match `hostSelector` and whose
    `consumerNamespaces` admit the machine's namespace.
 3. It creates a random per-host token, points the host's Tinkerbell
-   `Hardware` iPXE URL at `<boot-base-url>/boot/<ns>/<host>/<token>/boot.ipxe`
+   `Hardware` iPXE URL at `<boot-base-url>/i/<host>/<token>`
    and sets `allowPXE: true`.
 4. Over Redfish it requests a one-time UEFI PXE boot and power-cycles the
    server.
 5. smee answers DHCP and chains iPXE to the provider's boot server. The
    script boots the Talos kernel with `talos.experimental.wipe=system` (a
    reused disk never boots its previous `STATE`) and
-   `talos.config=<…>/config`.
+   `talos.config=<boot-base-url>/c/<host>/<token>`.
 6. Talos fetches its config: the CABPT bootstrap data plus the host's
    hostname, `machine.kubelet.extraConfig.providerID =
    bootbox://<ns>/<host>` and the host's `configPatches` (JSON merge patches
@@ -90,7 +90,7 @@ openssl s_client -connect <bmc>:443 </dev/null 2>/dev/null | openssl x509 -noout
 
 - The machine config contains cluster secrets. It is served over plain HTTP
   (Talos fetches `talos.config` before it has any trust anchor) and only
-  while the host provisions, behind a 256-bit per-host token. Keep the boot
+  while the host provisions, behind a 128-bit per-host token. Keep the boot
   network restricted to the servers.
 - The manager reads bootstrap Secrets in the cluster namespaces (`get`
   only; Secrets are not cached).
