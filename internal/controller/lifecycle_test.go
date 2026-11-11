@@ -149,7 +149,7 @@ func newEnv(t *testing.T, objs ...client.Object) *env {
 	t.Cleanup(e.server.Close)
 	base, _ := url.Parse(e.server.URL + "/capi")
 	urls := provision.BootURLs{Base: base}
-	bs := &bootserver.Server{Client: c, URLs: urls, KernelURL: "http://pxe/assets/vmlinuz", InitrdURL: "http://pxe/assets/initramfs.xz",
+	bs := &bootserver.Server{Client: c, URLs: urls, HostNamespace: hostNS, KernelURL: "http://pxe/assets/vmlinuz", InitrdURL: "http://pxe/assets/initramfs.xz",
 		KernelArgs: []string{"talos.platform=metal", "talos.experimental.wipe=system"}, Now: clock}
 	mux.Handle("/", bs.Handler())
 
@@ -221,7 +221,7 @@ func TestLifecycle(t *testing.T) {
 		t.Fatalf("boot not requested: attempts=%d calls=%v", h.Status.Provisioning.BootAttempts, e.bmc.calls)
 	}
 	res := e.reservation()
-	if !res.AllowPXE || !strings.HasPrefix(res.IPXEURL, e.server.URL+"/capi/boot/cozy-bootbox/xa06/") {
+	if !res.AllowPXE || !strings.HasPrefix(res.IPXEURL, e.server.URL+"/capi/i/xa06/") || len(res.IPXEURL) > 127 {
 		t.Fatalf("hardware netboot = %+v", res)
 	}
 	if m := e.bbm(); m.Status.Ready || m.Status.HostRef == nil || m.Status.HostRef.Name != "xa06" {
@@ -237,12 +237,12 @@ func TestLifecycle(t *testing.T) {
 	// iPXE script carries the config URL with the same token.
 	code, script := e.get(res.IPXEURL)
 	if code != http.StatusOK || !strings.Contains(script, "talos.experimental.wipe=system") ||
-		!strings.Contains(script, "talos.config="+strings.TrimSuffix(res.IPXEURL, "boot.ipxe")+"config") {
+		!strings.Contains(script, "talos.config="+strings.Replace(res.IPXEURL, "/i/", "/c/", 1)) {
 		t.Fatalf("iPXE %d:\n%s", code, script)
 	}
 
 	// Config is the bootstrap data plus host settings.
-	code, cfg := e.get(strings.TrimSuffix(res.IPXEURL, "boot.ipxe") + "config")
+	code, cfg := e.get(strings.Replace(res.IPXEURL, "/i/", "/c/", 1))
 	if code != http.StatusOK || !strings.Contains(cfg, "providerID: bootbox://cozy-bootbox/xa06") ||
 		!strings.Contains(cfg, "hostname: xa06") || !strings.Contains(cfg, "kind: BondConfig") {
 		t.Fatalf("config %d:\n%s", code, cfg)
@@ -351,5 +351,33 @@ func TestHostInspection(t *testing.T) {
 	}
 	if len(h.Finalizers) != 1 {
 		t.Fatalf("finalizers = %v", h.Finalizers)
+	}
+}
+
+func TestIPXEURLFitsDHCPBootFile(t *testing.T) {
+	base, _ := url.Parse("http://pxe.infra.kite.ume.de/capi")
+	h := &infrav1.BootBoxHost{ObjectMeta: metav1.ObjectMeta{Namespace: hostNS, Name: "xa06"}}
+	u, err := provision.BootURLs{Base: base}.IPXE(h, strings.Repeat("a", 32))
+	if err != nil || len(u) > provision.MaxIPXEURLLength {
+		t.Fatalf("url %q (%d bytes): %v", u, len(u), err)
+	}
+	h.Name = strings.Repeat("x", 63)
+	long, _ := url.Parse("http://pxe.infra.kite.ume.de/some/very/long/prefix/for/the/capi/boot/server")
+	if _, err := (provision.BootURLs{Base: long}).IPXE(h, strings.Repeat("a", 32)); err == nil {
+		t.Fatal("oversized URL accepted")
+	}
+}
+
+func TestOldTokenFormatIsReplaced(t *testing.T) {
+	objs := fixtures()
+	objs = append(objs, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: hostNS, Name: "xa06-boot-token"},
+		Data:       map[string][]byte{"token": []byte(strings.Repeat("b", 64))},
+	})
+	e := newEnv(t, objs...)
+	e.reconcile()
+	e.reconcile()
+	if r := e.reservation(); len(r.IPXEURL) > provision.MaxIPXEURLLength || strings.Contains(r.IPXEURL, strings.Repeat("b", 64)) {
+		t.Fatalf("old token still used: %s", r.IPXEURL)
 	}
 }

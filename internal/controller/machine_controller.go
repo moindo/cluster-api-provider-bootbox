@@ -165,7 +165,12 @@ func (r *MachineReconciler) reconcileNormal(ctx context.Context, machine *cluste
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if changed, err := hardware.SetNetboot(hw, r.URLs.IPXE(host, token), true); err != nil {
+	ipxeURL, err := r.URLs.IPXE(host, token)
+	if err != nil {
+		conditions.MarkFalse(bbm, infrav1.HostProvisionedCondition, infrav1.BootFailedReason, clusterv1.ConditionSeverityError, "%s", err.Error())
+		return ctrl.Result{}, err
+	}
+	if changed, err := hardware.SetNetboot(hw, ipxeURL, true); err != nil {
 		return ctrl.Result{}, err
 	} else if changed {
 		if err := r.Client.Update(ctx, hw); err != nil {

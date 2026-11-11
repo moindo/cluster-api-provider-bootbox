@@ -29,6 +29,8 @@ import (
 type Server struct {
 	Client client.Client
 	URLs   provision.BootURLs
+	// HostNamespace is where BootBoxHosts live.
+	HostNamespace string
 	// KernelURL and InitrdURL point at the Talos PXE assets (for example
 	// the BootBox matchbox assets).
 	KernelURL  string
@@ -45,10 +47,10 @@ boot
 
 // Handler returns the HTTP handler, mounted below the base URL's path.
 func (s *Server) Handler() http.Handler {
-	prefix := strings.TrimSuffix(s.URLs.Base.Path, "/") + "/boot/"
+	prefix := strings.TrimSuffix(s.URLs.Base.Path, "/")
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET "+prefix+"{namespace}/{host}/{token}/boot.ipxe", s.serveIPXE)
-	mux.HandleFunc("GET "+prefix+"{namespace}/{host}/{token}/config", s.serveConfig)
+	mux.HandleFunc("GET "+prefix+"/i/{host}/{token}", s.serveIPXE)
+	mux.HandleFunc("GET "+prefix+"/c/{host}/{token}", s.serveConfig)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	return mux
 }
@@ -58,7 +60,7 @@ var errNotProvisioning = errors.New("host is not provisioning")
 // authorize loads the host named in the request and checks its token.
 func (s *Server) authorize(r *http.Request) (*infrav1.BootBoxHost, error) {
 	h := &infrav1.BootBoxHost{}
-	key := client.ObjectKey{Namespace: r.PathValue("namespace"), Name: r.PathValue("host")}
+	key := client.ObjectKey{Namespace: s.HostNamespace, Name: r.PathValue("host")}
 	if err := s.Client.Get(r.Context(), key, h); err != nil {
 		return nil, err
 	}
