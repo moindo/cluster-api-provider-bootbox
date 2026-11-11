@@ -34,8 +34,11 @@ jobs:
           helm template kubernetes-nodes-training-gpu packages/apps/kubernetes-nodes --namespace tenant-training --values packages/apps/kubernetes-nodes/tests/values-bootbox.yaml --values /tmp/kubelet.yaml > /dev/null
       - name: Render the baremetal module
         run: helm template baremetal packages/apps/baremetal --namespace tenant-root --values packages/apps/baremetal/tests/values-cozykite.yaml > /dev/null
-      - name: ApplicationDefinitions are up to date
+      - name: Render the provider chart
+        run: helm template capi-bootbox packages/system/cluster-api-provider-bootbox --namespace cozy-bootbox --values packages/system/cluster-api-provider-bootbox/tests/values-cozykite.yaml > /dev/null
+      - name: Generated charts are up to date
         run: |
+          python3 hack/gen-provider-chart.py packages/system/cluster-api-provider-bootbox
           make -C packages/system/kubernetes-nodes-rd generate
           make -C packages/system/baremetal-rd generate
           git diff --exit-code

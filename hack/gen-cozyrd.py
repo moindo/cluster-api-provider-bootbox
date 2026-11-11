@@ -59,7 +59,11 @@ doc = {
             "openAPISchema": json.dumps(schema, separators=(",", ":")),
         },
         "release": {
-            "labels": {"sharding.fluxcd.io/key": "tenants"},
+            # Modules need the tenantmodule label on their HelmRelease, or
+            # the console's Admin -> Modules list (built from tenantmodules)
+            # leaves them out.
+            "labels": {"sharding.fluxcd.io/key": "tenants",
+                       **({"internal.cozystack.io/tenantmodule": "true"} if app.get("module") else {})},
             "prefix": app["prefix"],
             "chartRef": {
                 "kind": "ExternalArtifact",

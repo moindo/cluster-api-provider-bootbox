@@ -9,6 +9,7 @@ Cozystack integration of the BootBox provider, laid out like cozystack's own
 | `system/kubernetes-nodes-rd` | `ApplicationDefinition` `KubernetesNodes` pointing at this chart (`make -C system/kubernetes-nodes-rd generate`). |
 | `apps/baremetal` | `BareMetal` admin module (dashboard: Admin → Modules, one instance `baremetal` in tenant-root): a list of servers, each rendering its Tinkerbell `Hardware` (DHCP reservation) and `BootBoxHost` (BMC, labels, admitted tenants, static address) in `cozy-bootbox`. BMC credentials stay in hand-made Secrets `<name>-bmc`. |
 | `system/baremetal-rd` | `ApplicationDefinition` `BareMetal` (module). |
+| `system/cluster-api-provider-bootbox` | The provider itself (CRDs, RBAC, controllers and boot server) as a chart, installed by the `moindo.baremetal-application` package into `cozy-bootbox`. CRDs and RBAC are generated from `config/` (`make generate`). Site values (image tag, boot URLs, BMC network attachment) go into the Package's `spec.components.cluster-api-provider-bootbox.values`. |
 | `library/cozy-lib` | Vendored cozystack v1.7.0 library chart. |
 
 ## Install
@@ -26,7 +27,11 @@ Cozystack integration of the BootBox provider, laid out like cozystack's own
      `kubernetes-nodes-rd` (`system/kubernetes-nodes-rd`, installed in
      `cozy-system` as `kubernetes-nodes-rd`), same dependencies as upstream.
    - `moindo.baremetal-application` (variant `default`): components
-     `baremetal` and `baremetal-rd`.
+     `cluster-api-provider-bootbox` (installed in `cozy-bootbox` as
+     `capi-bootbox`, with site values), `baremetal` and `baremetal-rd`.
+     Enabling this one package brings the provider, the BareMetal module and
+     its definition; tenants then claim servers through `KubernetesNodes`
+     with `substrate: bootbox`.
 
 ## Status in the dashboard
 
