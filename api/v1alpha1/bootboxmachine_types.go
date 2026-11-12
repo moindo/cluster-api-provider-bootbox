@@ -26,6 +26,37 @@ const (
 	WaitingForConfigFetchReason = "WaitingForConfigFetch"
 )
 
+// Conditions in the Cluster API v1beta2 format (status.v1beta2.conditions).
+// Each one is a step of the provisioning flow; Ready summarises the steps up
+// to the config fetch and is what the Machine mirrors as InfrastructureReady.
+const (
+	// ReadyV1Beta2Condition: the host booted and fetched its machine config
+	// (status.ready).
+	ReadyV1Beta2Condition = clusterv1.ReadyV1Beta2Condition
+	// HostClaimedV1Beta2Condition: a BootBoxHost is claimed for this machine.
+	HostClaimedV1Beta2Condition = "HostClaimed"
+	// BMCReachableV1Beta2Condition mirrors BMCReachable of the claimed host.
+	BMCReachableV1Beta2Condition = "BMCReachable"
+	// HostBootedV1Beta2Condition: the host PXE-booted and fetched its iPXE
+	// script.
+	HostBootedV1Beta2Condition = "HostBooted"
+	// MachineConfigServedV1Beta2Condition: the host fetched its machine config.
+	MachineConfigServedV1Beta2Condition = "MachineConfigServed"
+	// HostProvisionedV1Beta2Condition: the host joined as a Node and its PXE
+	// window is closed.
+	HostProvisionedV1Beta2Condition = "HostProvisioned"
+
+	ClaimedV1Beta2Reason          = "Claimed"
+	NotClaimedV1Beta2Reason       = "NotClaimed"
+	BootNotRequestedV1Beta2Reason = "BootNotRequested"
+	BootRequestedV1Beta2Reason    = "BootRequested"
+	IPXEServedV1Beta2Reason       = "IPXEServed"
+	ConfigServedV1Beta2Reason     = "ConfigServed"
+	ProvisionedV1Beta2Reason      = "Provisioned"
+	NoHostV1Beta2Reason           = "NoHost"
+	ConditionUnknownV1Beta2Reason = "Unknown"
+)
+
 // BootBoxMachineSpec defines the desired state of a BootBoxMachine.
 type BootBoxMachineSpec struct {
 	// ProviderID is set by the provider to bootbox://<host namespace>/<host name>.
@@ -59,6 +90,22 @@ type BootBoxMachineStatus struct {
 
 	// +optional
 	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+
+	// V1Beta2 holds the conditions in the Cluster API v1beta2 format.
+	// +optional
+	V1Beta2 *BootBoxMachineV1Beta2Status `json:"v1beta2,omitempty"`
+}
+
+// BootBoxMachineV1Beta2Status groups the v1beta2 fields of the status.
+type BootBoxMachineV1Beta2Status struct {
+	// Conditions report the steps of the provisioning flow: HostClaimed,
+	// BMCReachable, HostBooted, MachineConfigServed, HostProvisioned and the
+	// summary Ready.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	// +kubebuilder:validation:MaxItems=32
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // BootBoxMachine is the Cluster API infrastructure machine for a
@@ -70,8 +117,10 @@ type BootBoxMachineStatus struct {
 // +kubebuilder:printcolumn:name="Cluster",type=string,JSONPath=`.metadata.labels['cluster\.x-k8s\.io/cluster-name']`
 // +kubebuilder:printcolumn:name="Host",type=string,JSONPath=`.status.hostRef.name`
 // +kubebuilder:printcolumn:name="Ready",type=boolean,JSONPath=`.status.ready`
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.v1beta2.conditions[?(@.type=="HostProvisioned")].reason`
 // +kubebuilder:printcolumn:name="ProviderID",type=string,JSONPath=`.spec.providerID`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,priority=1,JSONPath=`.status.v1beta2.conditions[?(@.type=="HostProvisioned")].message`
 type BootBoxMachine struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -85,6 +134,22 @@ func (m *BootBoxMachine) GetConditions() clusterv1.Conditions { return m.Status.
 
 // SetConditions implements conditions.Setter.
 func (m *BootBoxMachine) SetConditions(c clusterv1.Conditions) { m.Status.Conditions = c }
+
+// GetV1Beta2Conditions implements the v1beta2 conditions.Getter.
+func (m *BootBoxMachine) GetV1Beta2Conditions() []metav1.Condition {
+	if m.Status.V1Beta2 == nil {
+		return nil
+	}
+	return m.Status.V1Beta2.Conditions
+}
+
+// SetV1Beta2Conditions implements the v1beta2 conditions.Setter.
+func (m *BootBoxMachine) SetV1Beta2Conditions(c []metav1.Condition) {
+	if m.Status.V1Beta2 == nil {
+		m.Status.V1Beta2 = &BootBoxMachineV1Beta2Status{}
+	}
+	m.Status.V1Beta2.Conditions = c
+}
 
 // BootBoxMachineList is a list of BootBoxMachines.
 //

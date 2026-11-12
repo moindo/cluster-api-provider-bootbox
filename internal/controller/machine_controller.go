@@ -90,9 +90,13 @@ func (r *MachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ 
 		return ctrl.Result{}, err
 	}
 	defer func() {
-		if err := helper.Patch(ctx, bbm, patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
-			infrav1.HostProvisionedCondition,
-		}}); err != nil && !apierrors.IsNotFound(err) {
+		r.setStepConditions(bbm, r.hostOf(ctx, bbm))
+		if err := helper.Patch(ctx, bbm,
+			patch.WithOwnedConditions{Conditions: []clusterv1.ConditionType{
+				clusterv1.ReadyCondition, infrav1.HostProvisionedCondition,
+			}},
+			patch.WithOwnedV1Beta2Conditions{Conditions: v1beta2ConditionTypes},
+		); err != nil && !apierrors.IsNotFound(err) {
 			// NotFound: the finalizer was just removed and the object is gone.
 			reterr = errors.Join(reterr, err)
 		}

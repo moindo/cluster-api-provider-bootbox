@@ -19,6 +19,8 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/cluster-api/util/conditions"
+	v1beta2conditions "sigs.k8s.io/cluster-api/util/conditions/v1beta2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -505,4 +507,64 @@ func TestLifecycleEvents(t *testing.T) {
 	if released != 1 {
 		t.Fatalf("want one release event, got %d", released)
 	}
+}
+
+func TestStepConditions(t *testing.T) {
+	e := newEnv(t, fixtures()...)
+	want := func(stage string, steps map[string]metav1.ConditionStatus, ready metav1.ConditionStatus) {
+		t.Helper()
+		m := e.bbm()
+		for typ, status := range steps {
+			c := v1beta2conditions.Get(m, typ)
+			if c == nil || c.Status != status {
+				t.Fatalf("%s: %s = %+v, want %s", stage, typ, c, status)
+			}
+		}
+		if c := v1beta2conditions.Get(m, infrav1.ReadyV1Beta2Condition); c == nil || c.Status != ready {
+			t.Fatalf("%s: Ready = %+v, want %s", stage, c, ready)
+		}
+		if c := conditions.Get(m, clusterv1.ReadyCondition); c == nil || string(c.Status) != string(ready) {
+			t.Fatalf("%s: v1beta1 Ready = %+v, want %s", stage, c, ready)
+		}
+	}
+
+	e.reconcile()
+	e.reconcile()
+	want("boot requested", map[string]metav1.ConditionStatus{
+		infrav1.HostClaimedV1Beta2Condition:         metav1.ConditionTrue,
+		infrav1.HostBootedV1Beta2Condition:          metav1.ConditionFalse,
+		infrav1.MachineConfigServedV1Beta2Condition: metav1.ConditionFalse,
+	}, metav1.ConditionFalse)
+	if c := v1beta2conditions.Get(e.bbm(), infrav1.HostBootedV1Beta2Condition); c.Reason != infrav1.BootRequestedV1Beta2Reason {
+		t.Fatalf("HostBooted reason = %s", c.Reason)
+	}
+
+	res := e.reservation()
+	e.get(res.IPXEURL)
+	e.reconcile()
+	want("iPXE served", map[string]metav1.ConditionStatus{
+		infrav1.HostBootedV1Beta2Condition:          metav1.ConditionTrue,
+		infrav1.MachineConfigServedV1Beta2Condition: metav1.ConditionFalse,
+	}, metav1.ConditionFalse)
+
+	e.get(strings.Replace(res.IPXEURL, "/i/", "/c/", 1))
+	e.reconcile()
+	want("config served", map[string]metav1.ConditionStatus{
+		infrav1.MachineConfigServedV1Beta2Condition: metav1.ConditionTrue,
+		infrav1.HostProvisionedV1Beta2Condition:     metav1.ConditionFalse,
+	}, metav1.ConditionTrue)
+
+	machine := &clusterv1.Machine{}
+	_ = e.c.Get(context.Background(), client.ObjectKey{Namespace: tenantNS, Name: "bm-xa-0"}, machine)
+	machine.Status.NodeRef = &corev1.ObjectReference{Kind: "Node", Name: "xa06"}
+	if err := e.c.Status().Update(context.Background(), machine); err != nil {
+		t.Fatal(err)
+	}
+	e.reconcile()
+	want("provisioned", map[string]metav1.ConditionStatus{
+		infrav1.HostClaimedV1Beta2Condition:         metav1.ConditionTrue,
+		infrav1.HostBootedV1Beta2Condition:          metav1.ConditionTrue,
+		infrav1.MachineConfigServedV1Beta2Condition: metav1.ConditionTrue,
+		infrav1.HostProvisionedV1Beta2Condition:     metav1.ConditionTrue,
+	}, metav1.ConditionTrue)
 }
