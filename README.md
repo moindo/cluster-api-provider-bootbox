@@ -60,6 +60,65 @@ requested again, up to `--max-boot-attempts` times.
 
 Samples: [`config/samples/`](config/samples/).
 
+## Status and conditions
+
+Each `BootBoxMachine` reports the provisioning flow as Cluster API v1beta2
+conditions (`status.v1beta2.conditions`):
+
+| Condition | True when |
+|---|---|
+| `HostClaimed` | a `BootBoxHost` is claimed (otherwise the reason says why not, e.g. `NoHostAvailable`) |
+| `BMCReachable` | the claimed host's last Redfish call succeeded (mirrored from the host) |
+| `HostBooted` | the host PXE-booted and fetched its iPXE script (otherwise `BootRequested`, attempt n of m, or `BootFailed`) |
+| `MachineConfigServed` | Talos fetched its machine config |
+| `HostProvisioned` | the Node joined and the PXE window is closed |
+| `Ready` | summary of the first, third and fourth step, equal to `status.ready` |
+
+`Ready` is also written in the v1beta1 format, and the `Machine` mirrors it as
+`InfrastructureReady`, so `kubectl describe machine`, `clusterctl describe
+cluster` and other Cluster API tooling show where provisioning stands.
+`kubectl get bbm -o wide` adds the current step and its message.
+
+The provider also records lifecycle events against the Helm release that owns
+a pool or a host (Flux label `helm.toolkit.fluxcd.io/name`), and can publish a
+per-host summary into a ConfigMap named by the annotation
+`bootbox.infrastructure.cluster.x-k8s.io/status-configmap: <namespace>/<name>`
+for dashboards that cannot render custom resources.
+
+## Cozystack integration
+
+[`packages/`](packages/) holds a Cozystack package source:
+
+| Package | What it does |
+|---|---|
+| `system/cluster-api-provider-bootbox` | The provider (Helm chart, CRDs, RBAC), installed next to BootBox. |
+| `apps/baremetal` + `system/baremetal-rd` | `BareMetal` module for `tenant-root`: hardware profiles and the server inventory, rendered into Tinkerbell `Hardware` and `BootBoxHost` objects. Server status appears in the module's ConfigMaps tab. |
+| `apps/kubernetes-nodes` + `system/kubernetes-nodes-rd` | `KubernetesNodes` with an extra `substrate: bootbox`: a tenant pool claims servers by `bootbox.hostSelector`. KubeVirt and Proxmox pools render exactly as upstream. |
+
+The root tenant keeps the inventory; a child tenant gets servers by listing
+its namespace in a server's `consumerNamespaces` and creating a pool:
+
+```yaml
+apiVersion: apps.cozystack.io/v1alpha1
+kind: KubernetesNodes
+metadata:
+  name: mycluster-metal
+  namespace: tenant-team
+spec:
+  cluster: mycluster
+  substrate: bootbox
+  instanceType: ""
+  minReplicas: 1
+  maxReplicas: 1
+  bootbox:
+    hostSelector:
+      example.com/chassis: r750
+```
+
+Install it with a `PackageSource` pointing at this repository (`path:
+packages`) and disable the built-in `cozystack.kubernetes-nodes-application`
+package, which this one replaces.
+
 ## Install
 
 ```bash
@@ -113,7 +172,8 @@ make docker-build IMG=...
 - Talos `reset` over the API on deprovisioning instead of power-off + wipe on reuse
 - Inventory discovery from Redfish (MACs, disks) to create Hardware objects
 - Optional HTTPS for the config endpoint
-- Events and metrics per host
+- Metrics per host
+- `substrate: bootbox` in upstream Cozystack instead of the forked `kubernetes-nodes` package
 
 ## License
 
